@@ -1,0 +1,196 @@
+# 打 tag（v*）时触发：
+#   1. 交叉编译多平台二进制 → 创建 GitHub Release（附带二进制 + 自动生成的 changelog）
+#   2. 构建 Docker 镜像 → 推送到 GitHub Container Registry (ghcr.io)
+#
+# 使用方式：
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# 也可在仓库 Actions 页面手动运行（workflow_dispatch），此时取最新 tag。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '用于构建/发布的 tag（必须是已存在的 tag，如 v1.0.0）'
+        required: true
+        type: string
+
+# 同一 tag 并发推送时取消旧 run
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+# 推 GHCR 与写 Release 需要的权限
+permissions:
+  contents: write   # 创建 Release、上传资源
+  packages: write   # 推送镜像到 ghcr.io
+
+env:
+  # 镜像名（小写，GHCR 要求）。路径固定为 ghcr.io/<owner>/html-site
+  IMAGE: ghcr.io/${{ github.repository_owner }}/html-site
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Job 1：构建二进制 → 创建 GitHub Release
+  # ────────────────────────────────────────────────────────────
+  release-binary:
+    name: Build binaries & create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 手动触发时 checkout 指定 tag
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build matrix
+        run: |
+          # CGO_ENABLED=0 纯 Go，modernc.org/sqlite 无需 CGO，可静态编译
+          export CGO_ENABLED=0
+          VERSION="${{ steps.tag.outputs.version }}"
+          mkdir -p dist
+
+          build_one() {
+            local goos="$1" goarch="$2" ext="$3"
+            local out="dist/html-site_${VERSION}_${goos}_${goarch}${ext}"
+            GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+              -ldflags="-s -w -X main.version=${VERSION}" \
+              -o "$out" ./cmd/html-site
+            # 顺带打 tar.gz，方便 Linux/macOS 用户
+            tar -C dist -czf "${out}.tar.gz" "$(basename "$out")"
+            echo "✓ built $out"
+          }
+
+          build_one linux   amd64 ""
+          build_one linux   arm64 ""
+          build_one darwin  amd64 ""
+          build_one darwin  arm64 ""
+          build_one windows amd64 ".exe"
+          build_one windows arm64 ".exe"
+
+          ls -lh dist/
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          # 取上一个 tag 作为 changelog 起点
+          PREV=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            {
+              echo "## Changes"
+              echo ""
+              echo "Commits since ${PREV}:"
+              echo ""
+              git log --pretty=format:"- %s (%h)" "${PREV}..${VERSION}"
+            } > CHANGES.md
+          else
+            # 首个 release
+            {
+              echo "## Changes"
+              echo ""
+              echo "Initial release."
+              echo ""
+              git log --pretty=format:"- %s (%h)" "${VERSION}"
+            } > CHANGES.md
+          fi
+          echo "## Changelog preview"
+          cat CHANGES.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists, uploading assets to it."
+            gh release upload "$VERSION" dist/* --clobber
+          else
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --notes-file CHANGES.md \
+              --generate-notes \
+              dist/*
+          fi
+
+  # ────────────────────────────────────────────────────────────
+  # Job 2：构建 Docker 镜像 → 推送到 GHCR
+  # ────────────────────────────────────────────────────────────
+  release-image:
+    name: Build & push Docker image to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "clean=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            v="${GITHUB_REF#refs/tags/}"
+            echo "version=${v}" >> "$GITHUB_OUTPUT"
+            # 去掉开头的 v，做语义化标签：v1.2.3 -> 1.2.3
+            echo "clean=${v#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.tag.outputs.clean }}
+            type=semver,pattern={{major}},value=${{ steps.tag.outputs.clean }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.tag.outputs.clean }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

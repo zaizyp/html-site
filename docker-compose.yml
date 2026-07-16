@@ -2,7 +2,7 @@
 #
 # 使用：
 #   1. 复制本文件按需修改环境变量（尤其 HTML_SITE_URL）
-#   2. docker compose up -d --build
+#   2. docker compose pull && docker compose up -d
 #   3. 首次启动后进容器创建管理员：
 #        docker compose exec html-site /app/html-site user add --password <密码> admin
 #
@@ -10,9 +10,11 @@
 
 services:
   html-site:
-    build: .
-    # 若已推送到镜像仓库，改用 image: your-registry/html-site:latest
-    image: html-site:latest
+    # 直接拉取 GitHub Container Registry 上的预构建镜像，无需本地 build。
+    # 镜像由 .github/workflows/release.yml 在打 tag 时自动发布。
+    image: ghcr.io/zaizyp/html-site:latest
+    # 若需从本地源码自行构建（例如改了代码未发布），取消注释下一行：
+    # build: .
     container_name: html-site
     restart: unless-stopped
     ports:

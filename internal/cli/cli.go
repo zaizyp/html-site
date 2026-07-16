@@ -17,6 +17,11 @@ import (
 	"html-site/internal/store"
 )
 
+// Version 是当前二进制的版本号。
+// CI 发布时通过 -ldflags="-X html-site/internal/cli.Version=v1.0.1" 注入；
+// 本地 go build 保持 "dev"。
+var Version = "dev"
+
 // Dispatch 是入口：根据 args[0] 路由到对应子命令。
 // 返回 (exitCode, error)：error 非空时已打印。
 func Dispatch(args []string) int {
@@ -46,7 +51,7 @@ func Dispatch(args []string) int {
 	case "delete":
 		return cmdDelete(rest)
 	case "version":
-		fmt.Println("html-site v0.1.0")
+		fmt.Printf("html-site %s\n", Version)
 		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令：%q\n\n", cmd)

@@ -10,9 +10,130 @@
 
 ---
 
-## 快速开始
+## 安装
 
-### 1. 编译
+html-site 是**客户端 / 服务器 (C/S)** 架构：客户端（`html-site` 二进制 + skill）负责发布页面，服务器（`html-site serve` 或 Docker）负责托管。**大多数用户只需要装客户端**，连到别人提供的服务器即可。
+
+选一条适合你的路径：
+
+| 路径 | 适合谁 | 一句话 |
+|------|--------|--------|
+| **A. 丢给 AI agent 自动装** | 用 Codex / Claude Code / ZCode / WorkBuddy 等 | 把本仓库链接发给 AI，它读本 README 自动装客户端 |
+| **B. macOS / Linux 一行** | 命令行用户 | `curl … \| sh` |
+| **C. Windows 一行** | Windows 用户 | `irm … \| iex` |
+| **D. 自托管服务器** | 想自己跑 server 的人 | `docker pull` GHCR 镜像 |
+
+> 不管走哪条路径，**你都需要一个服务器地址 (`url`) 和一个 API `token`**。
+> 这两者由服务器管理员在执行 `html-site user add <name>` 时生成（token 仅显示一次）。
+> 没有这两个值，客户端无法发布页面。
+
+---
+
+### 路径 A：丢给 AI agent 自动装（推荐）
+
+如果你用的是 Codex、Claude Code、ZCode、WorkBuddy 等 AI 编程助手，最省事的方式是：**把本仓库链接发给它**，让它自己读完本 README 完成客户端安装。
+
+你可以直接对 AI 说：
+
+> 帮我装一下这个 html-site 技能作为客户端：https://github.com/zaizyp/html-site
+> 服务器地址是 `<你的URL>`，token 是 `<你的token>`
+
+AI 会自动执行下面的步骤。
+
+#### 给 AI 的安装步骤（人和 AI 都可读）
+
+**第 1 步 · 确认平台并下载二进制**
+
+先检测操作系统和 CPU 架构，然后从下表选对应的文件名。所有文件都从「最新 Release」的稳定 URL 拉取（无需知道版本号）：
+
+| 操作系统 | 架构 | 下载文件名 |
+|----------|------|-----------|
+| macOS (Apple Silicon) | arm64 | `html-site_darwin_arm64` |
+| macOS (Intel) | amd64 | `html-site_darwin_amd64` |
+| Linux | arm64 | `html-site_linux_arm64` |
+| Linux | amd64 | `html-site_linux_amd64` |
+| Windows | arm64 | `html-site_windows_arm64.exe` |
+| Windows | amd64 | `html-site_windows_amd64.exe` |
+
+下载地址模板（替换 `<文件名>`）：
+```
+https://github.com/zaizyp/html-site/releases/latest/download/<文件名>
+```
+
+- **macOS / Linux**：放到 `~/.local/bin/html-site`，执行 `chmod +x`，并确保 `~/.local/bin` 在 `PATH` 中。
+- **Windows**：放到 `%USERPROFILE%\.local\bin\html-site.exe`，并确保该目录在用户 `PATH` 中。
+
+> 如果 Release 里没有你要的平台，可用源码自建：`git clone` 本仓库后 `CGO_ENABLED=0 go build -o html-site ./cmd/html-site`（需 Go 1.25+，纯 Go 无 CGO）。
+
+**第 2 步 · 安装 skill（可选但推荐）**
+
+把仓库内 `skills/html-site/SKILL.md` 复制到你所用的 AI 框架的 skill 目录：
+
+| 框架 | skill 目录 |
+|------|-----------|
+| ZCode / WorkBuddy | `~/.agents/skills/html-site/SKILL.md` |
+| Claude Code | `~/.claude/skills/html-site/SKILL.md` |
+| Cursor | `~/.cursor/skills/html-site/SKILL.md` |
+| Codex | 沿用其 skill 配置目录 |
+
+> 装了 skill = 下次听到「发布 HTML」会**自动触发**；不装也能照着本 README 立即操作 CLI。
+
+**第 3 步 · 配置连接（关键，需用户提供凭据）**
+
+```bash
+html-site config set --url <服务器地址> --token <你的token>
+```
+
+> ⚠️ **安全要求**：`url` 和 `token` 是访问凭据。如果用户没有提供，**必须向用户索要，严禁自行编造或猜测**。token 由服务器管理员执行 `html-site user add <name>` 时生成，仅显示一次。
+
+**第 4 步 · 验证**
+
+```bash
+html-site version     # 应输出版本号，如 html-site v1.0.1
+html-site config show # 确认 url 和 token 已配置（token 脱敏显示）
+```
+
+验证通过后，即可发布页面：
+```bash
+html-site upload --file page.html --title "我的页面"
+```
+
+---
+
+### 路径 B：macOS / Linux 一行命令
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zaizyp/html-site/main/install.sh | sh
+```
+
+脚本会自动探测架构、下载二进制到 `~/.local/bin`、安装 skill 到 `~/.agents/skills`，并提示你配置 `url` + `token`。
+（也可用 `wget -qO- …/install.sh | sh`）
+
+### 路径 C：Windows 一行命令（PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/zaizyp/html-site/main/install.ps1 | iex
+```
+
+脚本会下载 `html-site.exe` 到 `%USERPROFILE%\.local\bin`、自动加入用户 `PATH`、安装 skill，并提示你配置 `url` + `token`。
+
+> **注意**：`irm | iex` 安装后，需**新开一个 PowerShell 窗口**，`html-site` 命令才在 PATH 中生效。
+
+### 路径 D：自托管服务器
+
+见下方 [Docker 部署](#docker-部署) 或 [从源码构建](#1-编译) 章节。镜像已发布到 GHCR，开箱即用：
+
+```bash
+docker pull ghcr.io/zaizyp/html-site:latest
+```
+
+---
+
+## 快速开始（服务器端）
+
+以下命令在**服务器上**执行，用于启动服务、创建用户。如果你只是客户端用户（连别人的服务器），跳到 [安装](#安装) 章节配置好 `url` + `token` 即可。
+
+### 1. 从源码编译
 
 ```bash
 go build -o html-site ./cmd/html-site      # Linux/macOS
@@ -119,14 +240,14 @@ HTML_SITE_ADDR=:9090 HTML_SITE_DATA=/var/lib/html-site HTML_SITE_URL=https://sit
 
 ## Docker 部署
 
-仓库提供 `Dockerfile`（多阶段构建）和 `docker-compose.yml`（示例配置）。
+镜像已发布到 GitHub Container Registry（GHCR），无需本地构建即可使用。仓库另提供 `Dockerfile`（多阶段构建）和 `docker-compose.yml`（示例配置）。
 
 ### 用 docker compose（推荐）
 
 ```bash
 # 1. 按需修改 docker-compose.yml 中的 HTML_SITE_URL（填你的实际域名）
-# 2. 构建并启动
-docker compose up -d --build
+# 2. 拉取镜像并启动（compose 文件已默认用 ghcr.io 镜像，无需 --build）
+docker compose pull && docker compose up -d
 
 # 3. 首次启动后，进容器创建管理员
 docker compose exec html-site /app/html-site user add --password <密码> admin
@@ -136,11 +257,11 @@ docker compose exec html-site /app/html-site user add --password <密码> admin
 
 数据持久化在宿主机 `./data` 目录（挂载到容器 `/app/data`），删容器不丢数据。
 
-### 用 docker 直接构建运行
+### 用 docker 直接拉取运行
 
 ```bash
-# 构建
-docker build -t html-site .
+# 拉取 GHCR 镜像
+docker pull ghcr.io/zaizyp/html-site:latest
 
 # 运行（数据持久化到宿主机 ./data）
 docker run -d --name html-site \
@@ -148,11 +269,13 @@ docker run -d --name html-site \
   -v "$PWD/data:/app/data" \
   -e HTML_SITE_URL=http://localhost:8080 \
   --restart unless-stopped \
-  html-site
+  ghcr.io/zaizyp/html-site:latest
 
 # 创建管理员
 docker exec -it html-site /app/html-site user add --password <密码> admin
 ```
+
+> 想从本地源码自行构建（例如改了代码未发布），把上面的 `pull` 换成 `docker build -t html-site .`，`docker run` 的镜像名用 `html-site` 即可。
 
 ### 镜像特点
 
@@ -253,14 +376,9 @@ location / {
 
 ---
 
-## AI Skill 安装
+## AI Skill
 
-仓库内 `skills/html-site/SKILL.md` 是配套技能。安装到 agent：
-
-```bash
-# 复制到用户级 skills 目录
-cp -r skills/html-site ~/.agents/skills/
-```
+仓库内 `skills/html-site/SKILL.md` 是配套技能，教 AI agent 如何调用 CLI 完成发布。详细的安装方式见开头 [安装 / 路径 A](#路径-a丢给-ai-agent-自动装推荐) 章节——既支持手动复制，也支持直接把仓库链接丢给 AI 让它自己装。
 
 安装后，AI agent 在听到"发布 HTML""生成可访问链接""修改已上线页面"等指令时，会自动按 SKILL.md 调用 CLI 完成发布并把链接回报给你。
 
@@ -301,7 +419,10 @@ html-site/
 │   └── cli/                    # 子命令实现
 ├── skills/html-site/SKILL.md   # 配套 AI skill
 ├── Dockerfile                  # 多阶段构建
-├── docker-compose.yml          # 部署示例
+├── docker-compose.yml          # 部署示例（默认拉 GHCR 镜像）
+├── install.sh                  # macOS/Linux 一键安装
+├── install.ps1                 # Windows 一键安装
+├── .github/workflows/release.yml  # CI：打 tag 自动发布二进制 + GHCR 镜像
 ├── .dockerignore
 └── go.mod                      # 依赖：modernc.org/sqlite + golang.org/x/crypto
 ```

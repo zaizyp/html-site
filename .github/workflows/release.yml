@@ -67,18 +67,19 @@ jobs:
       - name: Build matrix
         run: |
           # CGO_ENABLED=0 纯 Go，modernc.org/sqlite 无需 CGO，可静态编译
+          # 产物用「无版本号」的稳定文件名，便于安装脚本用固定 URL 拉取最新版：
+          #   https://github.com/zaizyp/html-site/releases/latest/download/html-site_<os>_<arch>[.exe]
           export CGO_ENABLED=0
           VERSION="${{ steps.tag.outputs.version }}"
           mkdir -p dist
 
           build_one() {
             local goos="$1" goarch="$2" ext="$3"
-            local out="dist/html-site_${VERSION}_${goos}_${goarch}${ext}"
+            # 稳定文件名：不带版本号，原始二进制（不做 tar.gz，AI 安装时少一步解压更稳）
+            local out="dist/html-site_${goos}_${goarch}${ext}"
             GOOS="$goos" GOARCH="$goarch" go build -trimpath \
-              -ldflags="-s -w -X main.version=${VERSION}" \
+              -ldflags="-s -w -X html-site/internal/cli.Version=${VERSION}" \
               -o "$out" ./cmd/html-site
-            # 顺带打 tar.gz，方便 Linux/macOS 用户
-            tar -C dist -czf "${out}.tar.gz" "$(basename "$out")"
             echo "✓ built $out"
           }
 

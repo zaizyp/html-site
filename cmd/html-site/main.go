@@ -10,10 +10,6 @@ import (
 	"html-site/internal/cli"
 )
 
-// version 在 CI 发布时通过 -ldflags="-X main.version=v1.0.0" 注入；
-// 本地构建保持 "dev"。
-var version = "dev"
-
 func main() {
 	os.Exit(cli.Dispatch(os.Args[1:]))
 }

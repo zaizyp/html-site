@@ -1,11 +1,11 @@
 ---
 name: html-site
-version: 0.1.0
-description: "把离线 HTML 文件发布成可分享的在线网页。当用户要求『发布 HTML / 上线页面 / 把这个 HTML 生成链接发给别人 / 生成可访问链接 / 修改已上线的页面 / 删除已发布页面 / 查看已发布页面列表』时使用本 skill。需要本地安装 html-site 二进制并配置好 server 地址与 token。"
+version: 0.2.0
+description: "把离线 HTML 文件发布成可分享的在线网页。当用户要求『发布 HTML / 上线页面 / 把这个 HTML 生成链接发给别人 / 生成可访问链接 / 修改已上线的页面 / 删除已发布页面 / 查看已发布页面列表 / 升级 html-site』时使用本 skill。需要本地安装 html-site 二进制并配置好 server 地址与 token。"
 metadata:
   requires:
     bins: ["html-site"]
-  cliHelp: "html-site help; html-site upload --help(子命令无 --help 时用 html-site help 查看用法)"
+  cliHelp: "html-site help; html-site upgrade(升级二进制与技能); html-site upload(发布页面)"
 ---
 
 # html-site —— 离线 HTML 在线发布
@@ -99,6 +99,19 @@ html-site info  --slug <SLUG> --json
 | `http 404: page not found`（操作别人的页面时）| slug 不存在或**不属于当前 owner**；权限设计上不区分两者，统一 404 |
 | `http 409: slug already taken`（upload 自定义 slug 时）| slug 被占了，换一个或省略 `--slug` 用随机 |
 | `--data` 等 flag 没生效 | **flags 必须写在位置参数前面**，例如 `html-site user add --data ./data alice`，而不是 `user add alice --data ./data`（仅 `user` 管理命令涉及） |
+
+## 升级 —— 用户说"升级 html-site"时使用
+
+当用户要求升级 html-site（或排查问题时要求重装），执行：
+
+```bash
+html-site upgrade          # 检查并升级到最新版（版本相同则只同步技能）
+html-site upgrade --force  # 强制重新下载并覆盖（排查问题时用）
+```
+
+- `upgrade` 会自动：① 调 GitHub API 查最新版本 → ② 下载对应平台二进制原子替换自身 → ③ 把最新 SKILL.md 同步到本机所有已安装技能的 agent 目录（ZCode / Claude Code / Codex / Cursor）。
+- 升级成功后回报新版本号；提示用户新版本在下次执行 `html-site` 时生效。
+- 若提示"已是最新版本"，无需进一步操作；`--force` 可用于强制覆盖损坏的安装。
 
 ## 不在本 Skill 范围
 

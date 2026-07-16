@@ -53,6 +53,8 @@ func Dispatch(args []string) int {
 	case "version":
 		fmt.Printf("html-site %s\n", Version)
 		return 0
+	case "upgrade":
+		return cmdUpgrade(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令：%q\n\n", cmd)
 		printUsage()
@@ -79,6 +81,9 @@ func printUsage() {
   html-site list
   html-site info     --slug S
   html-site delete   --slug S
+
+升级：
+  html-site upgrade [--force]   自更新二进制并同步技能到所有 agent 目录
 
 环境变量（均可用，优先级低于命令行 flag）：
   HTML_SITE_ADDR     serve 监听地址（默认 :8080）

@@ -34,7 +34,8 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
     }
 }
 
-$Asset = "html-site_windows_$arch"
+# Windows 产物带 .exe 后缀（见 release.yml: build_one windows amd64 ".exe"）
+$Asset = "html-site_windows_$arch.exe"
 $Url   = "$DownloadBase/$Asset"
 
 Write-Host "→ 平台：windows/$arch"

@@ -73,8 +73,10 @@ https://github.com/zaizyp/html-site/releases/latest/download/<文件名>
 |------|-----------|
 | ZCode / WorkBuddy | `~/.agents/skills/html-site/SKILL.md` |
 | Claude Code | `~/.claude/skills/html-site/SKILL.md` |
+| Codex | `~/.codex/skills/html-site/SKILL.md` |
 | Cursor | `~/.cursor/skills/html-site/SKILL.md` |
-| Codex | 沿用其 skill 配置目录 |
+
+> 各框架的用户级 skill 目录是事实标准位置。安装脚本和 `html-site upgrade` 会扫描上面这些目录，凡已安装 html-site 技能的都会自动同步到最新。
 
 > 装了 skill = 下次听到「发布 HTML」会**自动触发**；不装也能照着本 README 立即操作 CLI。
 
@@ -97,6 +99,17 @@ html-site config show # 确认 url 和 token 已配置（token 脱敏显示）
 ```bash
 html-site upload --file page.html --title "我的页面"
 ```
+
+#### 升级（二进制 + 技能一起更新）
+
+后续有新版本时，一条命令即可升级——同时更新二进制，并把最新 SKILL.md 同步到本机所有已安装技能的 agent 目录（ZCode / Claude Code / Codex / Cursor 都会覆盖到）：
+
+```bash
+html-site upgrade          # 检查并升级到最新版（版本相同则只同步技能）
+html-site upgrade --force  # 强制重新下载并覆盖（排查问题时用）
+```
+
+升级后新版本在**下次执行 `html-site`** 时生效。AI agent 也可以自主调用 `html-site upgrade` 完成升级。
 
 ---
 
@@ -328,6 +341,14 @@ location / {
 | `list [--json]` | 列出当前 owner 的页面 |
 | `info --slug S [--json]` | 查看详情（含 HTML 内容） |
 | `delete --slug S` | 删除 |
+| `upgrade [--force]` | 自更新二进制 + 同步技能到所有 agent 目录 |
+
+### 升级
+
+| 命令 | 说明 |
+|------|------|
+| `upgrade` | 检查 GitHub 最新版本，不同则下载替换二进制，并把最新 SKILL.md 同步到本机所有已安装技能的 agent 目录 |
+| `upgrade --force` | 强制重新下载并覆盖（即使版本相同） |
 
 ---
 

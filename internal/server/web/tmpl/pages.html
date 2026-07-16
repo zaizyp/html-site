@@ -1,0 +1,52 @@
+{{define "content"}}
+<div class="card">
+  <h1>页面管理</h1>
+  <p class="sub">{{- if .CurrentUser.IsAdmin}}全部用户的页面{{else}}我的页面{{end}}</p>
+
+  <form class="toolbar" method="GET" action="/admin/pages">
+    {{- if .CurrentUser.IsAdmin}}
+    <select name="owner">
+      <option value="">所有用户</option>
+      {{- range .Users}}<option value="{{.ID}}" {{if eq $.FilterOwner .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    {{- end}}
+    <select name="group">
+      <option value="0">全部分组</option>
+      <option value="-1" {{if eq .FilterGroup -1}}selected{{end}}>未分组</option>
+      {{- range .Groups}}<option value="{{.ID}}" {{if eq $.FilterGroup .ID}}selected{{end}}>{{.Name}} ({{.PageCount}})</option>{{end}}
+    </select>
+    <input type="search" name="q" value="{{.Query}}" placeholder="搜索 slug/标题">
+    <button type="submit" class="btn btn-sm">筛选</button>
+  </form>
+
+  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+
+  {{- if .Pages}}
+  <table>
+    <thead><tr><th>Slug</th><th>标题</th><th>分组</th><th>访问</th><th>大小</th><th>更新</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}<th>操作</th></tr></thead>
+    <tbody>
+    {{- range .Pages}}
+      <tr>
+        <td class="mono">{{.Slug}}</td>
+        <td>{{.Title}}</td>
+        <td>{{if .GroupName}}{{.GroupName}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>{{if .HasCode}}<span class="access-protected">受保护</span>{{else}}<span class="access-public">公开</span>{{end}}</td>
+        <td class="muted">{{SizeHuman .SizeBytes}}</td>
+        <td class="muted">{{.UpdatedAt.Format "01-02 15:04"}}</td>
+        {{- if $.CurrentUser.IsAdmin}}<td class="muted">{{.OwnerName}}</td>{{end}}
+        <td>
+          <div class="btn-row">
+            <a class="btn btn-sm btn-ghost" href="/v/{{.Slug}}" target="_blank">打开</a>
+            <form method="POST" action="/admin/pages/{{.ID}}/delete" onconfirm>
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除页面 {{.Slug}}？')">删除</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {{- end}}
+    </tbody>
+  </table>
+  {{- else}}<p class="muted">没有匹配的页面。</p>{{end}}
+</div>
+{{end}}

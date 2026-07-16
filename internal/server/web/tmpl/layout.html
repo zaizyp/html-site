@@ -1,0 +1,36 @@
+{{- /* layout.html: 后台通用框架。各页面 define "content"。 */ -}}
+{{define "layout"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · http-site 管理后台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{{- if .CurrentUser}}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/admin">📁 http-site</a>
+    <nav class="nav">
+      <a href="/admin/pages">页面</a>
+      <a href="/admin/groups">分组</a>
+      {{- if .CurrentUser.IsAdmin}}<a href="/admin/users">用户</a>{{end}}
+    </nav>
+    <div class="user">
+      <span class="user-name">{{.CurrentUser.Name}}
+        {{- if .CurrentUser.IsAdmin}} <span class="tag tag-admin">管理员</span>{{end}}</span>
+      <a href="/admin/account">设置</a>
+      <form method="POST" action="/admin/logout" class="inline">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button type="submit" class="link-btn">登出</button>
+      </form>
+    </div>
+  </div>
+</header>
+{{- end}}
+<main class="container">
+  {{template "content" .}}
+</main>
+</body>
+</html>{{end}}

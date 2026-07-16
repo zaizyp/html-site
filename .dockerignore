@@ -1,0 +1,13 @@
+# .dockerignore：减小构建上下文，加速构建
+.git
+.gitignore
+.idea
+.zcode
+data
+test-data
+*.exe
+*.db
+*.db-wal
+*.db-shm
+README.md
+skills

@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="card">
+  <h1>个人设置</h1>
+  <p class="sub">修改密码、管理 API token（CLI / agent 使用）</p>
+  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+
+  <h2 style="font-size:16px">修改密码</h2>
+  <form method="POST" action="/admin/account/password" style="max-width:360px">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field"><label>当前密码</label><input name="current" type="password" required></div>
+    <div class="field"><label>新密码</label><input name="new" type="password" required></div>
+    <div class="field"><label>确认新密码</label><input name="confirm" type="password" required></div>
+    <button type="submit">保存</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin-top:0">API Token</h2>
+  <p class="sub">CLI 和 AI agent 通过此 token 访问 API。重置后旧配置会失效。</p>
+  <p>当前 token：<code>{{.MaskedToken}}</code></p>
+  {{- if .NewToken}}
+  <div class="ok">新 token（仅显示一次）：<code>{{.NewToken}}</code></div>
+  {{- end}}
+  <form method="POST" action="/admin/account/regenerate-token">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="btn-danger" onclick="return confirm('重新生成 token？旧 CLI 配置会立即失效。')">重新生成 token</button>
+  </form>
+</div>
+{{end}}

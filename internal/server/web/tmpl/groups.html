@@ -1,0 +1,41 @@
+{{define "content"}}
+<div class="card">
+  <h1>分组管理</h1>
+  <p class="sub">单层分组，用于归类你的页面。删除分组不会删除其下页面（页面变为未分组）。</p>
+  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+
+  <form class="toolbar" method="POST" action="/admin/groups/create">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input name="name" placeholder="新分组名" required style="max-width:240px">
+    <button type="submit" class="btn btn-sm">新建分组</button>
+  </form>
+
+  {{- if .Groups}}
+  <table>
+    <thead><tr><th>名称</th><th>页面数</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}<th>操作</th></tr></thead>
+    <tbody>
+    {{- range .Groups}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.PageCount}}</td>
+        {{- if $.CurrentUser.IsAdmin}}<td class="muted">{{.OwnerName}}</td>{{end}}
+        <td>
+          <div class="btn-row">
+            <form method="POST" action="/admin/groups/{{.ID}}/rename" style="display:inline-flex;gap:4px">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <input name="name" value="{{.Name}}" style="width:130px;padding:4px 8px;font-size:12px">
+              <button type="submit" class="btn btn-sm btn-ghost">改名</button>
+            </form>
+            <form method="POST" action="/admin/groups/{{.ID}}/delete">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('删除分组 {{.Name}}？其下页面会变成未分组。')">删除</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {{- end}}
+    </tbody>
+  </table>
+  {{- else}}<p class="muted">还没有分组。</p>{{end}}
+</div>
+{{end}}

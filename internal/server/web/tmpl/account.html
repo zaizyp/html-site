@@ -1,29 +1,38 @@
 {{define "content"}}
 <div class="card">
-  <h1>个人设置</h1>
+  <div class="card-head"><h1>个人设置</h1></div>
   <p class="sub">修改密码、管理 API token（CLI / agent 使用）</p>
-  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
 
-  <h2 style="font-size:16px">修改密码</h2>
-  <form method="POST" action="/admin/account/password" style="max-width:360px">
+  <h2>修改密码</h2>
+  <form method="POST" action="/admin/account/password" style="max-width:400px">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <div class="field"><label>当前密码</label><input name="current" type="password" required></div>
-    <div class="field"><label>新密码</label><input name="new" type="password" required></div>
-    <div class="field"><label>确认新密码</label><input name="confirm" type="password" required></div>
-    <button type="submit">保存</button>
+    <div class="field"><label>当前密码</label><input name="current" type="password" required placeholder="输入当前密码"></div>
+    <div class="form-grid">
+      <div class="field"><label>新密码</label><input name="new" type="password" required placeholder="至少 6 位"></div>
+      <div class="field"><label>确认新密码</label><input name="confirm" type="password" required placeholder="再次输入"></div>
+    </div>
+    <button type="submit" class="btn">保存修改</button>
   </form>
 </div>
 
 <div class="card">
-  <h2 style="font-size:16px;margin-top:0">API Token</h2>
-  <p class="sub">CLI 和 AI agent 通过此 token 访问 API。重置后旧配置会失效。</p>
-  <p>当前 token：<code>{{.MaskedToken}}</code></p>
+  <div class="card-head"><h2 style="margin:0">API Token</h2></div>
+  <p class="sub">CLI 和 AI agent 通过此 token 访问 API。重置后旧配置会立即失效。</p>
+  <div style="display:flex;align-items:center;gap:10px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px">
+    <svg class="ic muted"><use href="/static/icons.svg#icon-key"/></svg>
+    <code style="background:none;padding:0;flex:1;font-size:13px">{{.MaskedToken}}</code>
+    <button class="copy-btn" data-copy="{{.MaskedToken}}"><svg class="ic"><use href="/static/icons.svg#icon-copy"/></svg> 复制</button>
+  </div>
   {{- if .NewToken}}
-  <div class="ok">新 token（仅显示一次）：<code>{{.NewToken}}</code></div>
+  <div class="flash-msg ok mt-3"><strong>新 token（仅显示一次）：</strong>
+    <code>{{.NewToken}}</code>
+    <button class="copy-btn" data-copy="{{.NewToken}}" style="margin-left:auto"><svg class="ic"><use href="/static/icons.svg#icon-copy"/></svg> 复制</button>
+  </div>
   {{- end}}
-  <form method="POST" action="/admin/account/regenerate-token">
+  <form method="POST" action="/admin/account/regenerate-token" class="mt-3" data-confirm="重新生成 token？旧 CLI 配置会立即失效。" data-danger>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <button type="submit" class="btn-danger" onclick="return confirm('重新生成 token？旧 CLI 配置会立即失效。')">重新生成 token</button>
+    <button type="submit" class="btn btn-danger-ghost"><svg class="ic"><use href="/static/icons.svg#icon-key"/></svg> 重新生成 token</button>
   </form>
 </div>
 {{end}}

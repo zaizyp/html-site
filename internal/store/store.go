@@ -378,16 +378,22 @@ func (s *Store) CreatePage(ownerID int64, content, title, shareCode, slug, group
 
 	// 2. 解析分组（可选）
 	var groupID any // 传 nil 给 NULL 列
+	var gidNum int64
 	if groupName = strings.TrimSpace(groupName); groupName != "" {
 		gid, err := s.ensureGroup(ownerID, groupName)
 		if err != nil {
 			return nil, err
 		}
 		groupID = gid
+		gidNum = gid
 	}
 
-	relPath := slug + ".html"
+	// 3. 落盘到二级目录 u<owner>/g<group>/<slug>.html
+	relPath := pageRelPath(ownerID, gidNum, slug)
 	absPath := s.AbsFilePath(relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create page dir: %w", err)
+	}
 	if err := os.WriteFile(absPath, []byte(content), 0o644); err != nil {
 		return nil, fmt.Errorf("write html file: %w", err)
 	}

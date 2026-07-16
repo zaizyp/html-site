@@ -4,6 +4,9 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"html-site/internal/model"
@@ -155,11 +158,47 @@ func (s *Store) DeleteGroup(groupID, ownerID int64) error {
 }
 
 // MovePageToGroup 把页面移到某分组（groupID=0 表示移出分组）。
+// 同时把磁盘 HTML 文件从旧的 g<oldGroup> 目录物理移动到新 g<groupID> 目录，
+// 并更新 file_path 列，保持「文件按 用户+分组 二级目录」的存储约定。
 func (s *Store) MovePageToGroup(pageID, groupID int64) error {
+	cur, err := s.PageByID(pageID)
+	if err != nil {
+		return err
+	}
+
 	var arg any = groupID
 	if groupID == 0 {
 		arg = nil
 	}
+
+	// 物理移动文件（仅在当前 file_path 是二级路径时才移动；
+	// 平铺路径属于尚未迁移的旧库，交给 migrate.go 处理，这里跳过物理移动避免误删）。
+	if isNestedPath(cur.FilePath) {
+		newRel := pageRelPath(cur.OwnerID, groupID, cur.Slug)
+		oldAbs := s.AbsFilePath(cur.FilePath)
+		newAbs := s.AbsFilePath(newRel)
+		if oldAbs != newAbs {
+			if err := os.MkdirAll(filepath.Dir(newAbs), 0o755); err != nil {
+				return fmt.Errorf("create target dir: %w", err)
+			}
+			if err := os.Rename(oldAbs, newAbs); err != nil {
+				// Rename 跨设备会失败，回退到 复制+删除
+				data, rerr := os.ReadFile(oldAbs)
+				if rerr != nil {
+					return fmt.Errorf("read page file for move: %w", rerr)
+				}
+				if werr := os.WriteFile(newAbs, data, 0o644); werr != nil {
+					return fmt.Errorf("write page file for move: %w", werr)
+				}
+				_ = os.Remove(oldAbs)
+			}
+			// 更新 file_path
+			if _, err := s.db.Exec(`UPDATE pages SET file_path = ? WHERE id = ?`, newRel, pageID); err != nil {
+				return err
+			}
+		}
+	}
+
 	res, err := s.db.Exec(
 		`UPDATE pages SET group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		arg, pageID,

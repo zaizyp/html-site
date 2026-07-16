@@ -2,11 +2,14 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"html-site/internal/model"
+	"html-site/internal/store"
 )
 
 // registerAdmin 注册全部后台路由。带 _p 的为公开（登录），其余需登录/管理员。
@@ -32,7 +35,9 @@ func (s *Server) registerAdmin() {
 	// 需登录
 	s.mux.HandleFunc("/admin", s.requireLogin(s.adminDashboard))
 	s.mux.HandleFunc("/admin/pages", s.requireLogin(s.adminPages))
-	s.mux.HandleFunc("/admin/pages/", s.requireLogin(s.adminPagesAction)) // delete
+	s.mux.HandleFunc("/admin/pages/new", s.requireLogin(s.adminPageNew))
+	s.mux.HandleFunc("/admin/pages/batch", s.requireLogin(s.adminPagesBatch))
+	s.mux.HandleFunc("/admin/pages/", s.requireLogin(s.adminPagesAction)) // {id}/delete | {id}/edit
 	s.mux.HandleFunc("/admin/groups", s.requireLogin(s.adminGroups))
 	s.mux.HandleFunc("/admin/groups/", s.requireLogin(s.adminGroupsAction)) // create/rename/delete
 	s.mux.HandleFunc("/admin/account", s.requireLogin(s.adminAccount))
@@ -43,12 +48,14 @@ func (s *Server) registerAdmin() {
 	s.mux.HandleFunc("/admin/users/", s.requireAdmin(s.adminUsersAction))
 }
 
-// adminPagesAction 处理 /admin/pages/{id}/delete。
+// adminPagesAction 处理 /admin/pages/{id}/delete 与 /admin/pages/{id}/edit。
 func (s *Server) adminPagesAction(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	switch {
 	case strings.HasSuffix(p, "/delete"):
 		s.adminPageDelete(w, r)
+	case strings.HasSuffix(p, "/edit"):
+		s.adminPageEdit(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -109,16 +116,34 @@ type adminData struct {
 	Flash        []flashMsg
 	// 各页面按需填充的字段
 	StatPages, StatGroups, StatUsers int
+	StatPV, StatUV                   int64
+	StatBytes                        int64
+	StatToday                        int
 	RecentPages                      []*model.Page
 	Pages                            []*model.Page
 	Groups                           []*model.Group
 	Users                            []*model.User
+	UserPageCount                    map[int64]int
 	FilterOwner, FilterGroup         int64
 	Query                            string
 	Username                         string
 	Error                            string
 	MaskedToken                      string
 	NewToken                         string
+	// 仪表盘图表数据（JSON 字符串，由模板 data-chart-* 消费）
+	ChartViews  string
+	ChartAccess string
+	ChartGroups []*model.GroupCount
+	MaxGroupCount int
+	TopPages    []store.TopPageByViews
+	// 分页
+	Page       int
+	TotalPages int
+	Total      int
+	PageNums   []int
+	// 编辑/上传页
+	EditPage *model.Page
+	Content  string
 }
 
 type flashMsg struct {
@@ -216,30 +241,106 @@ func (s *Server) adminDashboard(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r)
 	d := adminData{Title: "概览", CurrentUser: u, CSRF: currentCSRF(r)}
 
+	scope := int64(0) // 全站
+	if !u.IsAdmin() {
+		scope = u.ID
+	}
+
+	d.StatPages, _ = s.store.CountPages(scope, 0)
 	if u.IsAdmin() {
-		pages, _ := s.store.ListAllPages()
-		groups, _ := s.store.ListAllGroups()
 		users, _ := s.store.ListUsers()
-		d.StatPages = len(pages)
-		d.StatGroups = len(groups)
 		d.StatUsers = len(users)
-		if len(pages) > 5 {
-			d.RecentPages = pages[:5]
-		} else {
-			d.RecentPages = pages
-		}
+		d.StatGroups = s.countAllGroups()
 	} else {
-		pages, _ := s.store.ListPagesByOwner(u.ID, 0)
 		groups, _ := s.store.ListGroupsByOwner(u.ID)
-		d.StatPages = len(pages)
 		d.StatGroups = len(groups)
-		if len(pages) > 5 {
-			d.RecentPages = pages[:5]
-		} else {
-			d.RecentPages = pages
+	}
+	d.StatBytes, _ = s.store.TotalStorage(scope)
+	d.StatToday, _ = s.store.CountToday(scope)
+	d.StatPV, d.StatUV, _ = s.store.TotalViews()
+
+	// 最近页面
+	var recent []*model.Page
+	recent, _ = s.store.ListPagesPaged(scope, 0, 1, 5)
+	_ = s.store.AnnotatePagesWithViews(recent)
+	d.RecentPages = recent
+
+	// 访问趋势（近 14 天）——把 PV/UV 合并到同一组数据
+	type dv struct {
+		Label string `json:"label"`
+		PV    int64  `json:"pv"`
+		UV    int64  `json:"uv"`
+	}
+	viewPoints, _ := s.store.DailyViews(14)
+	// 用最近 14 天的日期补齐缺失天
+	merged := buildDailySeries(14, func(day string) dv {
+		for _, p := range viewPoints {
+			if p.Day == day {
+				return dv{Label: day, PV: p.PV, UV: p.UV}
+			}
+		}
+		return dv{Label: day}
+	})
+	if b, err := json.Marshal(merged); err == nil {
+		d.ChartViews = string(b)
+	}
+
+	// 访问权限环形
+	sp, _ := s.store.AccessSplit(scope)
+	if b, err := json.Marshal([]map[string]any{
+		{"label": "公开", "val": sp.Public, "color": "var(--ok)"},
+		{"label": "受保护", "val": sp.Protected, "color": "var(--warn)"},
+	}); err == nil {
+		d.ChartAccess = string(b)
+	}
+
+	// 分组页面数条形
+	d.ChartGroups = s.buildGroupCounts(u)
+	for _, g := range d.ChartGroups {
+		if g.Count > d.MaxGroupCount {
+			d.MaxGroupCount = g.Count
 		}
 	}
+	if d.MaxGroupCount == 0 {
+		d.MaxGroupCount = 1
+	}
+
+	// 热门页面
+	d.TopPages, _ = s.store.TopPagesByViews(5, scope)
+
 	s.renderAdmin(w, "dashboard.html", d)
+}
+
+// buildGroupCounts 组装仪表盘分组页面数列表。
+func (s *Server) buildGroupCounts(u *model.User) []*model.GroupCount {
+	var gs []*model.Group
+	if u.IsAdmin() {
+		gs, _ = s.store.ListAllGroups()
+	} else {
+		gs, _ = s.store.ListGroupsByOwner(u.ID)
+	}
+	out := make([]*model.GroupCount, 0, len(gs))
+	for _, g := range gs {
+		out = append(out, &model.GroupCount{Name: g.Name, Count: g.PageCount})
+	}
+	return out
+}
+
+// CountAllGroups 返回全部分组数。
+func (s *Server) countAllGroups() int {
+	gs, _ := s.store.ListAllGroups()
+	return len(gs)
+}
+
+// buildDailySeries 生成最近 n 天的连续日期序列，并对每天调用 pick 填充数据点。
+func buildDailySeries[T any](n int, pick func(day string) T) []T {
+	out := make([]T, 0, n)
+	now := time.Now()
+	for i := n - 1; i >= 0; i-- {
+		day := now.AddDate(0, 0, -i).Format("2006-01-02")
+		out = append(out, pick(day))
+	}
+	return out
 }
 
 // ----------------------------------------------------------------------------
@@ -268,15 +369,33 @@ func (s *Server) adminPages(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Query = strings.TrimSpace(r.URL.Query().Get("q"))
 
-	// 取数据
-	var pages []*model.Page
-	if u.IsAdmin() && d.FilterOwner == 0 {
-		pages, _ = s.store.ListAllPages()
-	} else {
-		pages, _ = s.store.ListPagesByOwner(ownerFilter, d.FilterGroup)
+	// 分页
+	d.Page, _ = strconv.Atoi(r.URL.Query().Get("page"))
+	if d.Page < 1 {
+		d.Page = 1
 	}
+	const pageSize = 15
+
+	// 查询数据：管理员且未指定 owner 看全站；否则按 owner
+	listOwner := ownerFilter
+	scopeOwner := int64(0) // 统计总数用
+	if !(u.IsAdmin() && d.FilterOwner == 0) {
+		scopeOwner = ownerFilter
+	}
+	// 管理员"所有用户"时，ownerFilter=0 表示全站
+	if u.IsAdmin() && d.FilterOwner == 0 {
+		listOwner = 0
+	}
+	pages, _ := s.store.ListPagesPaged(listOwner, d.FilterGroup, d.Page, pageSize)
 	pages = filterSearch(pages, d.Query)
+	_ = s.store.AnnotatePagesWithViews(pages)
 	d.Pages = pages
+	d.Total, _ = s.store.CountPages(scopeOwner, d.FilterGroup)
+	d.TotalPages = (d.Total + pageSize - 1) / pageSize
+	if d.TotalPages < 1 {
+		d.TotalPages = 1
+	}
+	d.PageNums = pageNumbers(d.Page, d.TotalPages)
 
 	// 分组列表（筛选下拉用）
 	if u.IsAdmin() {
@@ -289,7 +408,48 @@ func (s *Server) adminPages(w http.ResponseWriter, r *http.Request) {
 	s.renderAdmin(w, "pages.html", d)
 }
 
-// filterSearch 按 q 过滤 slug/标题。
+// pageNumbers 生成分页器页码数组（含 -1 表示省略号 …）。
+func pageNumbers(cur, total int) []int {
+	if total <= 7 {
+		out := make([]int, total)
+		for i := 0; i < total; i++ {
+			out[i] = i + 1
+		}
+		return out
+	}
+	out := []int{1}
+	left := cur - 2
+	right := cur + 2
+	if left <= 1 {
+		left = 2
+	}
+	if right >= total {
+		right = total - 1
+	}
+	if left > 2 {
+		out = append(out, -1)
+	}
+	for i := left; i <= right; i++ {
+		out = append(out, i)
+	}
+	if right < total-1 {
+		out = append(out, -1)
+	}
+	out = append(out, total)
+	return out
+}
+
+// fillUserPageCount 为用户列表填充每人页面数。
+func (s *Server) fillUserPageCount(users []*model.User) map[int64]int {
+	m := make(map[int64]int, len(users))
+	for _, u := range users {
+		n, _ := s.store.CountPages(u.ID, 0)
+		m[u.ID] = n
+	}
+	return m
+}
+
+// filterSearch 按 q 过滤 slug/标题/owner。
 func filterSearch(pages []*model.Page, q string) []*model.Page {
 	if q == "" {
 		return pages

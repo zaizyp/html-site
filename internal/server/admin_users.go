@@ -20,6 +20,7 @@ func (s *Server) adminUsers(w http.ResponseWriter, r *http.Request) {
 	d.Flash = s.popFlash(w, r)
 	users, _ := s.store.ListUsers()
 	d.Users = users
+	d.UserPageCount = s.fillUserPageCount(users)
 	s.renderAdmin(w, "users.html", d)
 }
 

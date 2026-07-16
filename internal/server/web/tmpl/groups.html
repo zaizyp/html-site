@@ -1,34 +1,39 @@
 {{define "content"}}
 <div class="card">
-  <h1>分组管理</h1>
-  <p class="sub">单层分组，用于归类你的页面。删除分组不会删除其下页面（页面变为未分组）。</p>
-  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+  <div class="card-head"><h1>分组管理</h1></div>
+  <p class="sub">单层分组，用于归类页面。删除分组不会删除其下页面（页面变为未分组）。文件会按 <code>用户/分组</code> 二级目录存放。</p>
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
 
   <form class="toolbar" method="POST" action="/admin/groups/create">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <input name="name" placeholder="新分组名" required style="max-width:240px">
-    <button type="submit" class="btn btn-sm">新建分组</button>
+    <input name="name" placeholder="新分组名" required style="max-width:260px">
+    <button type="submit" class="btn btn-sm btn-soft"><svg class="ic"><use href="/static/icons.svg#icon-plus"/></svg> 新建分组</button>
   </form>
 
   {{- if .Groups}}
-  <table>
-    <thead><tr><th>名称</th><th>页面数</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}<th>操作</th></tr></thead>
+  <table class="responsive">
+    <thead><tr><th>名称</th><th class="num">页面数</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}<th>操作</th></tr></thead>
     <tbody>
     {{- range .Groups}}
       <tr>
-        <td>{{.Name}}</td>
-        <td>{{.PageCount}}</td>
-        {{- if $.CurrentUser.IsAdmin}}<td class="muted">{{.OwnerName}}</td>{{end}}
-        <td>
-          <div class="btn-row">
-            <form method="POST" action="/admin/groups/{{.ID}}/rename" style="display:inline-flex;gap:4px">
+        <td data-label="名称">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg class="ic muted" style="width:16px;height:16px"><use href="/static/icons.svg#icon-folder"/></svg>
+            {{.Name}}
+          </div>
+        </td>
+        <td class="num tabular" data-label="页面数">{{.PageCount}}</td>
+        {{- if $.CurrentUser.IsAdmin}}<td class="muted" data-label="归属">{{.OwnerName}}</td>{{end}}
+        <td class="row-actions-cell">
+          <div class="row-actions">
+            <form method="POST" action="/admin/groups/{{.ID}}/rename" style="display:inline-flex;gap:4px;align-items:center">
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <input name="name" value="{{.Name}}" style="width:130px;padding:4px 8px;font-size:12px">
+              <input name="name" value="{{.Name}}" style="width:130px;padding:5px 9px;font-size:12.5px">
               <button type="submit" class="btn btn-sm btn-ghost">改名</button>
             </form>
-            <form method="POST" action="/admin/groups/{{.ID}}/delete">
+            <form method="POST" action="/admin/groups/{{.ID}}/delete" data-confirm="删除分组 {{.Name}}？其下页面会变成未分组。" data-danger>
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('删除分组 {{.Name}}？其下页面会变成未分组。')">删除</button>
+              <button type="submit" class="btn btn-sm btn-danger-ghost" title="删除"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg></button>
             </form>
           </div>
         </td>
@@ -36,6 +41,12 @@
     {{- end}}
     </tbody>
   </table>
-  {{- else}}<p class="muted">还没有分组。</p>{{end}}
+  {{- else}}
+  <div class="empty">
+    <svg class="ic"><use href="/static/icons.svg#icon-groups"/></svg>
+    <div class="et">还没有分组</div>
+    <div class="es">创建分组来归类管理你的页面</div>
+  </div>
+  {{- end}}
 </div>
 {{end}}

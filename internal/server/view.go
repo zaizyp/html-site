@@ -60,15 +60,25 @@ func (s *Server) viewPage(w http.ResponseWriter, r *http.Request, slug string) {
 		return
 	}
 
+	// 解析后台登录态：用于「owner/管理员免分享码」与「自己访问不计 PV」判断。
+	loggedUser, _, logged := s.resolveSession(w, r)
+	isOwnerOrAdmin := logged && (loggedUser.ID == p.OwnerID || loggedUser.IsAdmin())
+
 	// 公开页面：直接返回
 	if !p.HasCode {
-		s.serveHTML(w, r, p)
+		s.serveHTML(w, r, p, !isOwnerOrAdmin)
+		return
+	}
+
+	// 受保护页面：owner 本人 或 管理员 免输入分享码。
+	if isOwnerOrAdmin {
+		s.serveHTML(w, r, p, false) // 自己/管理员不计 PV
 		return
 	}
 
 	// 非公开：校验 cookie
 	if validShareCookie(r, slug, p.ShareCode) {
-		s.serveHTML(w, r, p)
+		s.serveHTML(w, r, p, true)
 		return
 	}
 
@@ -109,7 +119,8 @@ func (s *Server) verifyShareCode(w http.ResponseWriter, r *http.Request, slug st
 }
 
 // serveHTML 读取磁盘文件并作为 text/html 返回。
-func (s *Server) serveHTML(w http.ResponseWriter, r *http.Request, p *model.Page) {
+// record 为 true 时异步记录一次 PV（IP/UA 仅存 hash）。
+func (s *Server) serveHTML(w http.ResponseWriter, r *http.Request, p *model.Page, record bool) {
 	content, err := s.store.ReadPageContent(p)
 	if err != nil {
 		http.NotFound(w, r)
@@ -118,6 +129,27 @@ func (s *Server) serveHTML(w http.ResponseWriter, r *http.Request, p *model.Page
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(content)
+
+	if record {
+		// 异步记录访问，不阻塞响应；丢弃超时/取消。
+		ip := clientIP(r)
+		ua := r.UserAgent()
+		go s.store.RecordView(p.ID, ip, ua)
+	}
+}
+
+// clientIP 尽量取真实客户端 IP（兼容反代 X-Forwarded-For / X-Real-IP），取首段。
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xr := r.Header.Get("X-Real-IP"); xr != "" {
+		return strings.TrimSpace(xr)
+	}
+	return r.RemoteAddr
 }
 
 // ----------------------------------------------------------------------------

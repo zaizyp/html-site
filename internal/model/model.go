@@ -38,6 +38,8 @@ type Page struct {
 	SizeBytes int64     `json:"size_bytes"`
 	GroupID   int64     `json:"group_id,omitempty"` // 0 = 未分组
 	GroupName string    `json:"group_name,omitempty"`
+	Views     int64     `json:"views,omitempty"`  // PV，列表展示用（按需填充）
+	UV        int64     `json:"uv,omitempty"`     // UV，列表展示用（按需填充）
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -90,3 +92,15 @@ type Session struct {
 
 // SessionTTL session 有效期。
 const SessionTTL = 30 * 24 * time.Hour
+
+// GroupCount 用于仪表盘分组页面数条形图。
+type GroupCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// AccessSplit 用于仪表盘访问权限环形图。
+type AccessSplit struct {
+	Public   int `json:"public"`
+	Protected int `json:"protected"`
+}

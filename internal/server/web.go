@@ -7,6 +7,8 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 //go:embed web/tmpl/*.html
@@ -17,8 +19,41 @@ var staticFS embed.FS
 
 // tmplFuncs 模板公共函数。
 var tmplFuncs = template.FuncMap{
-	"hasRole":  func(role, want string) bool { return role == want },
+	"hasRole":   func(role, want string) bool { return role == want },
 	"SizeHuman": sizeHuman,
+	"add":       func(a, b int) int { return a + b },
+	"sub":       func(a, b int) int { return a - b },
+	"pct":       pctWidth, // count, max -> "NN%"
+	"pageURL":   pageURLFn,
+}
+
+// pctWidth 返回条形图填充宽度百分比（count/max*100，至少 2%）。
+func pctWidth(count, max int) string {
+	if max <= 0 {
+		return "0%"
+	}
+	v := count * 100 / max
+	if v < 2 && count > 0 {
+		v = 2
+	}
+	return strconv.Itoa(v) + "%"
+}
+
+// pageURLFn 生成分页链接，保留 owner/group/q 筛选参数。
+// 用法：{{pageURL "/admin/pages" pageNum filterOwner filterGroup query}}
+func pageURLFn(base string, page int, owner, group int64, q string) string {
+	v := url.Values{}
+	v.Set("page", strconv.Itoa(page))
+	if owner != 0 {
+		v.Set("owner", strconv.FormatInt(owner, 10))
+	}
+	if group != 0 {
+		v.Set("group", strconv.FormatInt(group, 10))
+	}
+	if q != "" {
+		v.Set("q", q)
+	}
+	return base + "?" + v.Encode()
 }
 
 // sizeHuman 字节数 → 人类可读。

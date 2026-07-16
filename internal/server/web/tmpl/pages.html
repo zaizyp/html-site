@@ -1,6 +1,11 @@
 {{define "content"}}
 <div class="card">
-  <h1>页面管理</h1>
+  <div class="card-head">
+    <h1>页面管理</h1>
+    <div class="head-right">
+      <a class="btn btn-sm btn-soft" href="/admin/pages/new"><svg class="ic"><use href="/static/icons.svg#icon-upload"/></svg> 上传 / 新建</a>
+    </div>
+  </div>
   <p class="sub">{{- if .CurrentUser.IsAdmin}}全部用户的页面{{else}}我的页面{{end}}</p>
 
   <form class="toolbar" method="GET" action="/admin/pages">
@@ -15,31 +20,64 @@
       <option value="-1" {{if eq .FilterGroup -1}}selected{{end}}>未分组</option>
       {{- range .Groups}}<option value="{{.ID}}" {{if eq $.FilterGroup .ID}}selected{{end}}>{{.Name}} ({{.PageCount}})</option>{{end}}
     </select>
-    <input type="search" name="q" value="{{.Query}}" placeholder="搜索 slug/标题">
-    <button type="submit" class="btn btn-sm">筛选</button>
+    <input type="search" name="q" value="{{.Query}}" placeholder="搜索 slug / 标题" style="min-width:200px">
+    <button type="submit" class="btn btn-sm"><svg class="ic"><use href="/static/icons.svg#icon-search"/></svg> 筛选</button>
+    <span class="spacer"></span>
+    {{- if gt .TotalPages 1}}
+    <span class="muted nowrap">第 {{.Page}} / {{.TotalPages}} 页 · 共 {{.Total}} 条</span>
+    {{- end}}
   </form>
 
-  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
 
   {{- if .Pages}}
-  <table>
-    <thead><tr><th>Slug</th><th>标题</th><th>分组</th><th>访问</th><th>大小</th><th>更新</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}<th>操作</th></tr></thead>
+  <!-- 批量操作栏：选中的页面 id 由 app.js 在提交时动态注入各批量表单 -->
+  <div class="batch-bar" data-batch-bar>
+    <span class="sel-count" data-sel-count>0</span> 项已选择
+    <span class="spacer" style="flex:1"></span>
+    <form method="POST" action="/admin/pages/batch" data-batch-form data-confirm="确定批量移动选中的页面到该分组？" style="display:inline-flex;gap:6px;align-items:center">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="hidden" name="action" value="move">
+      <select name="group" style="width:auto;min-width:120px">
+        <option value="0">移出分组</option>
+        {{- range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+      <button type="submit" class="btn btn-sm btn-ghost">移动分组</button>
+    </form>
+    <form method="POST" action="/admin/pages/batch" data-batch-form data-confirm="确定批量删除选中的页面？此操作不可撤销！" data-danger style="display:inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="hidden" name="action" value="delete">
+      <button type="submit" class="btn btn-sm btn-danger-ghost"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg> 批量删除</button>
+    </form>
+  </div>
+
+  <table class="responsive" data-select-table>
+    <thead><tr>
+      <th class="cb"><input type="checkbox" data-check-all></th>
+      <th>Slug</th><th>标题</th><th>分组</th><th>访问</th>
+      <th class="num">PV</th><th class="num">大小</th><th>更新</th>
+      {{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}
+      <th>操作</th>
+    </tr></thead>
     <tbody>
     {{- range .Pages}}
       <tr>
-        <td class="mono">{{.Slug}}</td>
-        <td>{{.Title}}</td>
-        <td>{{if .GroupName}}{{.GroupName}}{{else}}<span class="muted">—</span>{{end}}</td>
-        <td>{{if .HasCode}}<span class="access-protected">受保护</span>{{else}}<span class="access-public">公开</span>{{end}}</td>
-        <td class="muted">{{SizeHuman .SizeBytes}}</td>
-        <td class="muted">{{.UpdatedAt.Format "01-02 15:04"}}</td>
-        {{- if $.CurrentUser.IsAdmin}}<td class="muted">{{.OwnerName}}</td>{{end}}
-        <td>
-          <div class="btn-row">
-            <a class="btn btn-sm btn-ghost" href="/v/{{.Slug}}" target="_blank">打开</a>
-            <form method="POST" action="/admin/pages/{{.ID}}/delete" onconfirm>
+        <td class="cb" data-label=""><input type="checkbox" value="{{.ID}}" data-check-row></td>
+        <td class="mono" data-label="Slug">{{.Slug}}</td>
+        <td class="t-wrap" data-label="标题">{{.Title}}</td>
+        <td data-label="分组">{{if .GroupName}}{{.GroupName}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td data-label="访问">{{if .HasCode}}<span class="badge-dot dot-protected">受保护</span>{{else}}<span class="badge-dot dot-public">公开</span>{{end}}</td>
+        <td class="num tabular" data-label="PV">{{.Views}}</td>
+        <td class="num muted" data-label="大小">{{SizeHuman .SizeBytes}}</td>
+        <td class="muted nowrap" data-label="更新">{{.UpdatedAt.Format "01-02 15:04"}}</td>
+        {{- if $.CurrentUser.IsAdmin}}<td class="muted" data-label="归属">{{.OwnerName}}</td>{{end}}
+        <td class="row-actions-cell">
+          <div class="row-actions">
+            <a class="btn btn-sm btn-ghost" href="/v/{{.Slug}}" target="_blank" title="打开"><svg class="ic"><use href="/static/icons.svg#icon-external"/></svg></a>
+            <a class="btn btn-sm btn-soft" href="/admin/pages/{{.ID}}/edit" title="编辑"><svg class="ic"><use href="/static/icons.svg#icon-edit"/></svg></a>
+            <form method="POST" action="/admin/pages/{{.ID}}/delete" data-confirm="确认删除页面 {{.Slug}}？" data-danger>
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除页面 {{.Slug}}？')">删除</button>
+              <button type="submit" class="btn btn-sm btn-danger-ghost" title="删除"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg></button>
             </form>
           </div>
         </td>
@@ -47,6 +85,25 @@
     {{- end}}
     </tbody>
   </table>
-  {{- else}}<p class="muted">没有匹配的页面。</p>{{end}}
+
+  {{- if gt .TotalPages 1}}
+  <div class="pagination">
+    {{- if gt .Page 1}}<a class="pg" href="{{pageURL "/admin/pages" (sub .Page 1) .FilterOwner .FilterGroup .Query}}">‹ 上一页</a>{{end}}
+    {{- range .PageNums}}
+      {{- if eq . $.Page}}<span class="pg active">{{.}}</span>
+      {{- else if eq . -1}}<span class="dots">…</span>
+      {{- else}}<a class="pg" href="{{pageURL "/admin/pages" . $.FilterOwner $.FilterGroup $.Query}}">{{.}}</a>{{end}}
+    {{- end}}
+    {{- if lt .Page .TotalPages}}<a class="pg" href="{{pageURL "/admin/pages" (add .Page 1) .FilterOwner .FilterGroup .Query}}">下一页 ›</a>{{end}}
+  </div>
+  {{- end}}
+
+  {{- else}}
+  <div class="empty">
+    <svg class="ic"><use href="/static/icons.svg#icon-empty"/></svg>
+    <div class="et">没有匹配的页面</div>
+    <div class="es">点击右上角「上传 / 新建」发布你的第一个 HTML 页面</div>
+  </div>
+  {{- end}}
 </div>
 {{end}}

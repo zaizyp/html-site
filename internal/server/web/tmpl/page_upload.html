@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="card">
+  <div class="card-head"><h1>{{if .EditPage}}编辑页面{{else}}发布新页面{{end}}</h1></div>
+  <p class="sub">{{if .EditPage}}修改标题 / 分组 / 分享码，并在线编辑 HTML 内容{{else}}在线编写或上传一个 HTML 文件，生成可分享的访问链接{{end}}</p>
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
+
+  <form method="POST" action="{{if .EditPage}}/admin/pages/{{.EditPage.ID}}/edit{{else}}/admin/pages/new{{end}}" id="pageForm">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="form-grid">
+      <div class="field">
+        <label>标题</label>
+        <input name="title" value="{{if .EditPage}}{{.EditPage.Title}}{{end}}" placeholder="给页面起个名字（可选）">
+      </div>
+      <div class="field">
+        <label>Slug（访问路径，留空自动生成{{if .EditPage}}；改名会更新访问链接{{end}}）</label>
+        <input name="slug" class="mono" value="{{if .EditPage}}{{.EditPage.Slug}}{{end}}" placeholder="my-page">
+      </div>
+      <div class="field">
+        <label>分组</label>
+        <select name="group_id">
+          <option value="0" {{if (and .EditPage (eq .EditPage.GroupID 0))}}selected{{end}}>未分组</option>
+          {{- range .Groups}}
+          <option value="{{.ID}}" {{if (and $.EditPage (eq $.EditPage.GroupID .ID))}}selected{{end}}>{{.Name}}</option>
+          {{- end}}
+        </select>
+      </div>
+      <div class="field">
+        <label>分享码（留空 = 公开访问）</label>
+        <input name="share_code" value="{{if .EditPage}}{{.EditPage.ShareCode}}{{end}}" placeholder="可选，设置后访问需输入">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>HTML 内容</label>
+      {{- if .EditPage}}
+      <div class="editor-wrap">
+        <div class="editor-pane">
+          <div class="ph"><svg class="ic" style="width:13px;height:13px"><use href="/static/icons.svg#icon-edit"/></svg> 源代码（支持 Tab 缩进）</div>
+          <textarea id="htmlSrc" name="content" spellcheck="false">{{.Content}}</textarea>
+        </div>
+        <div class="editor-pane">
+          <div class="ph"><svg class="ic" style="width:13px;height:13px"><use href="/static/icons.svg#icon-eye"/></svg> 实时预览</div>
+          <iframe id="previewFrame" class="preview-frame" sandbox="allow-same-origin"></iframe>
+        </div>
+      </div>
+      {{- else}}
+      <div class="dropzone" data-dropzone>
+        <svg class="ic"><use href="/static/icons.svg#icon-upload"/></svg>
+        <div class="et" style="font-weight:600;color:var(--text)">点击选择 或 拖拽 .html 文件到这里</div>
+        <div class="es" data-drop-name style="margin-top:6px">也可在下方直接粘贴 / 编写 HTML</div>
+        <input type="file" name="file" accept=".html,.htm,text/html" data-drop-input style="display:none">
+      </div>
+      <div class="mt-2">
+        <textarea id="htmlSrc" name="content" rows="14" spellcheck="false" placeholder="<!doctype html>&#10;<html>&#10;  …直接编写 HTML…&#10;</html>"></textarea>
+      </div>
+      <div class="hint">提示：选择文件后会自动把文件名填入标题、内容填入下方编辑框。</div>
+      {{- end}}
+    </div>
+
+    <div class="form-row">
+      <button type="submit" class="btn btn-lg">{{if .EditPage}}保存修改{{else}}发布页面{{end}}</button>
+      {{- if .EditPage}}
+      <a class="btn btn-lg btn-ghost" href="/v/{{.EditPage.Slug}}" target="_blank"><svg class="ic"><use href="/static/icons.svg#icon-external"/></svg> 打开预览</a>
+      {{- end}}
+      <a class="btn btn-lg btn-ghost" href="/admin/pages">取消</a>
+    </div>
+  </form>
+</div>
+<script>
+// 上传模式下：选了文件 → 读入 textarea
+(function(){
+  var input = document.querySelector('[data-drop-input]');
+  var ta = document.getElementById('htmlSrc');
+  var titleInput = document.querySelector('[name=title]');
+  if(!input || !ta) return;
+  input.addEventListener('change', function(){
+    var f = input.files[0]; if(!f) return;
+    var r = new FileReader();
+    r.onload = function(){ ta.value = r.result; ta.dispatchEvent(new Event('input')); };
+    r.readAsText(f);
+    if(titleInput && !titleInput.value){
+      titleInput.value = f.name.replace(/\.(html?|htm)$/i,'');
+    }
+  });
+})();
+</script>
+{{end}}

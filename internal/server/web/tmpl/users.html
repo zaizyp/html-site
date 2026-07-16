@@ -1,51 +1,60 @@
 {{define "content"}}
 <div class="card">
-  <h1>用户管理 <span class="tag tag-admin">仅管理员</span></h1>
-  <p class="sub">创建/删除用户、调整角色、重置密码</p>
-  {{- range .Flash}}<div class="{{.Class}}">{{.Msg}}</div>{{end}}
+  <div class="card-head">
+    <h1>用户管理</h1>
+    <span class="tag tag-admin">仅管理员</span>
+  </div>
+  <p class="sub">创建 / 删除用户、调整角色、重置密码</p>
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
 
   <form class="toolbar" method="POST" action="/admin/users/create">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <input name="name" placeholder="用户名" required style="max-width:160px">
-    <input name="password" type="password" placeholder="密码" required style="max-width:160px">
+    <input name="name" placeholder="用户名" required style="max-width:170px">
+    <input name="password" type="password" placeholder="密码" required style="max-width:170px">
     <select name="role" style="width:auto">
       <option value="user">普通用户</option>
       <option value="admin">管理员</option>
     </select>
-    <button type="submit" class="btn btn-sm">创建用户</button>
+    <button type="submit" class="btn btn-sm btn-soft"><svg class="ic"><use href="/static/icons.svg#icon-plus"/></svg> 创建用户</button>
   </form>
 
   {{- if .Users}}
-  <table>
-    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>密码</th><th>创建时间</th><th>操作</th></tr></thead>
+  <table class="responsive">
+    <thead><tr><th class="num">ID</th><th>用户名</th><th>角色</th><th>密码</th><th>页面数</th><th>创建时间</th><th>操作</th></tr></thead>
     <tbody>
     {{- range .Users}}
       <tr>
-        <td class="muted">{{.ID}}</td>
-        <td>{{.Name}}</td>
-        <td>{{if .IsAdmin}}<span class="tag tag-admin">管理员</span>{{else}}<span class="tag">普通</span>{{end}}</td>
-        <td class="muted">{{if .HasPassword}}已设置{{else}}<span class="access-protected">未设置</span>{{end}}</td>
-        <td class="muted">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
-        <td>
-          <div class="btn-row">
-            <form method="POST" action="/admin/users/{{.ID}}/reset-password">
+        <td class="num muted" data-label="ID">{{.ID}}</td>
+        <td data-label="用户名">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="avatar" style="width:26px;height:26px;font-size:11px">{{slice .Name 0 1}}</span>
+            {{.Name}}
+          </div>
+        </td>
+        <td data-label="角色">{{if .IsAdmin}}<span class="tag tag-admin">管理员</span>{{else}}<span class="tag tag-user">普通</span>{{end}}</td>
+        <td data-label="密码">{{if .HasPassword}}<span class="muted">已设置</span>{{else}}<span class="badge-dot dot-protected">未设置</span>{{end}}</td>
+        <td class="num tabular" data-label="页面数">{{if $.UserPageCount}}{{$cnt := index $.UserPageCount .ID}}{{$cnt}}{{else}}—{{end}}</td>
+        <td class="muted nowrap" data-label="创建时间">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+        <td class="row-actions-cell">
+          <div class="row-actions">
+            <form method="POST" action="/admin/users/{{.ID}}/reset-password" data-confirm="重置 {{.Name}} 的密码？将生成随机新密码。">
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-ghost">重置密码</button>
+              <button type="submit" class="btn btn-sm btn-ghost" title="重置密码"><svg class="ic"><use href="/static/icons.svg#icon-key"/></svg></button>
             </form>
             {{- if .IsAdmin}}
-            <form method="POST" action="/admin/users/{{.ID}}/demote">
+            <form method="POST" action="/admin/users/{{.ID}}/demote" data-confirm="将 {{.Name}} 降为普通用户？">
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-ghost">降为普通</button>
+              <button type="submit" class="btn btn-sm btn-ghost">降级</button>
             </form>
             {{- else}}
-            <form method="POST" action="/admin/users/{{.ID}}/promote">
+            <form method="POST" action="/admin/users/{{.ID}}/promote" data-confirm="将 {{.Name}} 升为管理员？">
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-ghost">升为管理员</button>
+              <button type="submit" class="btn btn-sm btn-ghost">升级</button>
             </form>
             {{- end}}
-            <form method="POST" action="/admin/users/{{.ID}}/delete">
+            <form method="POST" action="/admin/users/{{.ID}}/delete" data-confirm="删除用户 {{.Name}}？其名下页面和分组会一并删除！" data-danger>
               <input type="hidden" name="csrf" value="{{$.CSRF}}">
-              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('删除用户 {{.Name}}？其名下页面和分组会一并删除！')">删除</button>
+              <button type="submit" class="btn btn-sm btn-danger-ghost" title="删除"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg></button>
             </form>
           </div>
         </td>
@@ -53,6 +62,6 @@
     {{- end}}
     </tbody>
   </table>
-  {{- end}}
+  {{- else}}<div class="empty"><div class="et">还没有用户</div></div>{{end}}
 </div>
 {{end}}

@@ -10,6 +10,9 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"html-site/internal/model"
@@ -35,6 +38,8 @@ func (s *Store) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_pages_group ON pages(group_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_exp  ON sessions(expires_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_views_page ON page_views(page_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_views_time ON page_views(viewed_at);`,
 	}
 	for _, idx := range indexes {
 		if _, err := s.db.Exec(idx); err != nil {
@@ -54,6 +59,13 @@ func (s *Store) migrate() error {
 		); err != nil {
 			return err
 		}
+	}
+
+	// 5. 文件路径迁移：把旧的平铺 file_path（形如 "abc123.html"，不含 /）
+	// 搬到二级目录 u<owner>/g<group>/<slug>.html，并更新 file_path 列。
+	// 幂等：已是二级路径（含 /）的记录跳过。
+	if err := s.migrateFilePaths(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -99,4 +111,65 @@ func hasColumn(db *sql.DB, table, column string) (bool, error) {
 		}
 	}
 	return false, rows.Err()
+}
+
+// migrateFilePaths 把历史平铺的 page file_path（如 "abc123.html"）搬到
+// 二级目录 u<owner>/g<group>/<slug>.html。已是二级路径的记录跳过，幂等。
+//
+// 逐行处理：读出 owner_id/group_id/slug/file_path，若 file_path 不含 '/'，
+// 则构造新路径、mkdir、移动文件、UPDATE。
+func (s *Store) migrateFilePaths() error {
+	rows, err := s.db.Query(`SELECT id, owner_id, group_id, slug, file_path FROM pages`)
+	if err != nil {
+		return err
+	}
+	type rec struct {
+		id      int64
+		owner   int64
+		groupID int64
+		slug    string
+		oldRel  string
+	}
+	var todo []rec
+	for rows.Next() {
+		var r rec
+		var gid sql.NullInt64
+		if err := rows.Scan(&r.id, &r.owner, &gid, &r.slug, &r.oldRel); err != nil {
+			rows.Close()
+			return err
+		}
+		if gid.Valid {
+			r.groupID = gid.Int64
+		}
+		if !isNestedPath(r.oldRel) {
+			todo = append(todo, r)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, r := range todo {
+		newRel := pageRelPath(r.owner, r.groupID, r.slug)
+		oldAbs := s.AbsFilePath(r.oldRel)
+		newAbs := s.AbsFilePath(newRel)
+		if err := os.MkdirAll(filepath.Dir(newAbs), 0o755); err != nil {
+			return fmt.Errorf("migrate: mkdir %s: %w", filepath.Dir(newAbs), err)
+		}
+		// 文件不存在（历史数据丢失）则跳过物理移动，只更新路径
+		if _, statErr := os.Stat(oldAbs); statErr == nil {
+			if err := os.Rename(oldAbs, newAbs); err != nil {
+				data, rerr := os.ReadFile(oldAbs)
+				if rerr == nil {
+					if werr := os.WriteFile(newAbs, data, 0o644); werr == nil {
+						_ = os.Remove(oldAbs)
+					}
+				}
+			}
+		}
+		if _, err := s.db.Exec(`UPDATE pages SET file_path = ? WHERE id = ?`, newRel, r.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }

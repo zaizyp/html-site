@@ -1,36 +1,74 @@
-{{- /* layout.html: 后台通用框架。各页面 define "content"。 */ -}}
+{{- /* layout.html: 后台通用框架（侧边栏布局）。各页面 define "content"。
+       navActive 用于高亮当前导航项，由各页面用 $.Active 提供（缺省时按 Title 匹配）。 */ -}}
 {{define "layout"}}<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · http-site 管理后台</title>
+<title>{{.Title}} · html-site 管理后台</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 {{- if .CurrentUser}}
-<header class="topbar">
-  <div class="topbar-inner">
-    <a class="brand" href="/admin">📁 http-site</a>
-    <nav class="nav">
-      <a href="/admin/pages">页面</a>
-      <a href="/admin/groups">分组</a>
-      {{- if .CurrentUser.IsAdmin}}<a href="/admin/users">用户</a>{{end}}
-    </nav>
-    <div class="user">
-      <span class="user-name">{{.CurrentUser.Name}}
-        {{- if .CurrentUser.IsAdmin}} <span class="tag tag-admin">管理员</span>{{end}}</span>
-      <a href="/admin/account">设置</a>
-      <form method="POST" action="/admin/logout" class="inline">
-        <input type="hidden" name="csrf" value="{{.CSRF}}">
-        <button type="submit" class="link-btn">登出</button>
-      </form>
+<div class="app">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="logo"><svg class="ic" style="width:18px;height:18px;color:#fff"><use href="/static/icons.svg#icon-logo"/></svg></span>
+      html-site
     </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">工作台</div>
+      <a class="nav-item{{if eq .Title "概览"}} active{{end}}" href="/admin">
+        <svg class="ic"><use href="/static/icons.svg#icon-dashboard"/></svg> 概览
+      </a>
+      <a class="nav-item{{if eq .Title "页面管理"}} active{{end}}" href="/admin/pages">
+        <svg class="ic"><use href="/static/icons.svg#icon-pages"/></svg> 页面管理
+      </a>
+      <a class="nav-item{{if eq .Title "分组管理"}} active{{end}}" href="/admin/groups">
+        <svg class="ic"><use href="/static/icons.svg#icon-groups"/></svg> 分组管理
+      </a>
+      {{- if .CurrentUser.IsAdmin}}
+      <div class="nav-section-label">管理</div>
+      <a class="nav-item{{if eq .Title "用户管理"}} active{{end}}" href="/admin/users">
+        <svg class="ic"><use href="/static/icons.svg#icon-users"/></svg> 用户管理
+      </a>
+      {{- end}}
+    </nav>
+    <div class="sidebar-foot">
+      <div class="foot-user">
+        <span class="avatar">{{slice .CurrentUser.Name 0 1}}</span>
+        <div class="meta">
+          <div class="nm">{{.CurrentUser.Name}}{{if .CurrentUser.IsAdmin}} <span class="tag tag-admin">管理员</span>{{end}}</div>
+          <div class="rl">{{if .CurrentUser.IsAdmin}}Administrator{{else}}Member{{end}}</div>
+        </div>
+        <form method="POST" action="/admin/logout" class="inline">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <button type="submit" class="icon-btn" title="登出"><svg class="ic"><use href="/static/icons.svg#icon-logout"/></svg></button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-toggle" data-menu-toggle><svg class="ic"><use href="/static/icons.svg#icon-menu"/></svg></button>
+      <div class="page-title">{{.Title}}</div>
+      <span class="spacer"></span>
+      <a class="btn btn-sm btn-ghost" href="/admin/pages/new"><svg class="ic"><use href="/static/icons.svg#icon-plus"/></svg> 发布页面</a>
+      <button class="icon-btn" data-theme-toggle title="切换主题"><svg class="ic"><use href="/static/icons.svg#icon-moon"/></svg></button>
+      <a class="icon-btn" href="/admin/account" title="个人设置"><svg class="ic"><use href="/static/icons.svg#icon-settings"/></svg></a>
+    </header>
+    <main class="content">
+      {{template "content" .}}
+    </main>
   </div>
-</header>
+</div>
+{{- else}}
+<main>{{template "content" .}}</main>
 {{- end}}
-<main class="container">
-  {{template "content" .}}
-</main>
+
+<script src="/static/app.js"></script>
 </body>
 </html>{{end}}

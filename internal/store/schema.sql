@@ -42,3 +42,12 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 页面访问统计（PV/UV）。IP 与 UA 仅存 hash，不存明文，兼顾隐私与 UV 去重。
+CREATE TABLE IF NOT EXISTS page_views (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  page_id        INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+  viewed_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_hash        TEXT NOT NULL DEFAULT '',    -- IP 的 sha256 前 16 hex
+  ua_hash        TEXT NOT NULL DEFAULT ''     -- User-Agent 的 sha256 前 16 hex
+);

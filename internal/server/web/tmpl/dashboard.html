@@ -1,34 +1,122 @@
 {{define "content"}}
-<div class="card">
-  <h1>概览</h1>
-  <p class="sub">欢迎回来，{{.CurrentUser.Name}}</p>
-  <div class="stat-grid">
-    <div class="stat"><div class="num">{{.StatPages}}</div><div class="lbl">页面{{- if not .CurrentUser.IsAdmin}}（我的）{{end}}</div></div>
-    <div class="stat"><div class="num">{{.StatGroups}}</div><div class="lbl">分组{{- if not .CurrentUser.IsAdmin}}（我的）{{end}}</div></div>
-    {{- if .CurrentUser.IsAdmin}}<div class="stat"><div class="num">{{.StatUsers}}</div><div class="lbl">用户</div></div>{{end}}
+<div class="card" style="padding:0;border:0;background:none;box-shadow:none">
+  <div style="margin-bottom:6px">
+    <h1 style="font-size:22px;font-weight:720">欢迎回来，{{.CurrentUser.Name}} 👋</h1>
+    <p class="sub" style="margin:2px 0 0">{{- if .CurrentUser.IsAdmin}}这里是全站概览{{else}}这里是你名下页面的概览{{end}}</p>
   </div>
 </div>
+
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-pages"/></svg></div>
+    <div class="lbl">页面{{if not .CurrentUser.IsAdmin}}（我的）{{end}}</div>
+    <div class="num tabular">{{.StatPages}}</div>
+  </div>
+  <div class="kpi ic-green">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-groups"/></svg></div>
+    <div class="lbl">分组{{if not .CurrentUser.IsAdmin}}（我的）{{end}}</div>
+    <div class="num tabular">{{.StatGroups}}</div>
+  </div>
+  {{- if .CurrentUser.IsAdmin}}
+  <div class="kpi ic-purple">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-users"/></svg></div>
+    <div class="lbl">用户</div>
+    <div class="num tabular">{{.StatUsers}}</div>
+  </div>
+  {{- end}}
+  <div class="kpi ic-orange">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-chart"/></svg></div>
+    <div class="lbl">总访问 PV</div>
+    <div class="num tabular">{{.StatPV}}</div>
+    <div class="delta">{{.StatUV}} 独立访客 (UV)</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-database"/></svg></div>
+    <div class="lbl">存储用量</div>
+    <div class="num">{{SizeHuman .StatBytes}}</div>
+  </div>
+  <div class="kpi ic-green">
+    <div class="kpi-ic"><svg class="ic"><use href="/static/icons.svg#icon-trend"/></svg></div>
+    <div class="lbl">今日新增</div>
+    <div class="num tabular">{{.StatToday}}</div>
+  </div>
+</div>
+
+<!-- 图表 -->
+<div class="charts-grid">
+  <div class="chart-box">
+    <div class="ct">访问趋势 · 近 14 天</div>
+    <div class="cs">实线 PV / 虚线 UV（自己访问不计入）</div>
+    <div data-chart-line='{{.ChartViews}}'></div>
+    <div class="chart-legend">
+      <span class="li"><span class="sw" style="background:var(--primary)"></span> PV 访问量</span>
+      <span class="li"><span class="sw" style="background:var(--accent)"></span> UV 独立访客</span>
+    </div>
+  </div>
+  <div class="chart-box">
+    <div class="ct">访问权限分布</div>
+    <div class="cs">公开 vs 受分享码保护</div>
+    <div data-chart-donut='{{.ChartAccess}}'></div>
+  </div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-box">
+    <div class="ct">分组页面数</div>
+    <div class="cs">各分组下的页面数量</div>
+    {{- if .ChartGroups}}
+    <div class="barlist">
+      {{- range .ChartGroups}}
+      <div class="row">
+        <span class="nm" title="{{.Name}}">{{.Name}}</span>
+        <span class="track"><span class="fill" style="width:{{pct .Count $.MaxGroupCount}}"></span></span>
+        <span class="val">{{.Count}}</span>
+      </div>
+      {{- end}}
+    </div>
+    {{- else}}<div class="muted" style="padding:20px 0;text-align:center">暂无分组</div>{{end}}
+  </div>
+  <div class="chart-box">
+    <div class="card-head" style="margin:0"><div class="ct" style="margin:0">热门页面 · Top 5</div></div>
+    <div class="cs">按访问量排序</div>
+    {{- if .TopPages}}
+    <table>
+      <tbody>
+      {{- range .TopPages}}
+        <tr>
+          <td class="mono t-wrap">{{.Slug}}</td>
+          <td class="num tabular"><strong>{{.PV}}</strong> <span class="muted">PV</span></td>
+          <td class="num muted tabular">{{.UV}} UV</td>
+        </tr>
+      {{- end}}
+      </tbody>
+    </table>
+    {{- else}}<div class="muted" style="padding:20px 0;text-align:center">暂无访问数据</div>{{end}}
+  </div>
+</div>
+
+<!-- 最近页面 -->
 <div class="card">
-  <div class="toolbar">
-    <h1 style="margin:0;font-size:18px">最近页面</h1>
-    <span class="spacer"></span>
-    <a class="btn btn-sm" href="/admin/pages">查看全部</a>
+  <div class="card-head"><h2 style="margin:0">最近更新的页面</h2>
+    <div class="head-right"><a class="btn btn-sm btn-ghost" href="/admin/pages">查看全部</a></div>
   </div>
   {{- if .RecentPages}}
   <table>
-    <thead><tr><th>Slug</th><th>标题</th><th>访问</th><th>更新</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}</tr></thead>
+    <thead><tr><th>Slug</th><th>标题</th><th>访问</th><th class="num">PV</th><th>更新</th>{{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}</tr></thead>
     <tbody>
     {{- range .RecentPages}}
       <tr>
         <td class="mono">{{.Slug}}</td>
-        <td>{{.Title}}</td>
-        <td>{{if .HasCode}}<span class="access-protected">受保护</span>{{else}}<span class="access-public">公开</span>{{end}}</td>
-        <td class="muted">{{.UpdatedAt.Format "01-02 15:04"}}</td>
+        <td class="t-wrap">{{.Title}}</td>
+        <td>{{if .HasCode}}<span class="badge-dot dot-protected">受保护</span>{{else}}<span class="badge-dot dot-public">公开</span>{{end}}</td>
+        <td class="num tabular">{{.Views}}</td>
+        <td class="muted nowrap">{{.UpdatedAt.Format "01-02 15:04"}}</td>
         {{- if $.CurrentUser.IsAdmin}}<td class="muted">{{.OwnerName}}</td>{{end}}
       </tr>
     {{- end}}
     </tbody>
   </table>
-  {{- else}}<p class="muted">还没有页面。</p>{{end}}
+  {{- else}}<div class="empty"><svg class="ic"><use href="/static/icons.svg#icon-empty"/></svg><div class="et">还没有页面</div><div class="es">发布你的第一个 HTML 页面吧</div></div>{{end}}
 </div>
 {{end}}

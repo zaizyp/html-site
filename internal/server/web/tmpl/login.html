@@ -1,23 +1,28 @@
 {{define "content"}}
 <div class="login-wrap">
   <div class="login-card">
+    <div class="login-brand">
+      <span class="logo"><svg class="ic" style="width:22px;height:22px;color:#fff"><use href="/static/icons.svg#icon-logo"/></svg></span>
+      html-site
+    </div>
     <div class="card">
-      <h1>登录管理后台</h1>
+      <h1 style="font-size:18px">登录管理后台</h1>
       <p class="sub">使用账号密码登录</p>
-      {{- if .Error}}<div class="err">{{.Error}}</div>{{end}}
+      {{- if .Error}}<div class="flash-msg err" data-flash="err">{{.Error}}</div>{{end}}
       <form method="POST" action="/admin/login">
         <input type="hidden" name="csrf" value="{{.CSRF}}">
         <div class="field">
           <label>用户名</label>
-          <input name="username" autofocus required value="{{.Username}}">
+          <input name="username" autofocus required value="{{.Username}}" placeholder="请输入用户名">
         </div>
         <div class="field">
           <label>密码</label>
-          <input name="password" type="password" required>
+          <input name="password" type="password" required placeholder="请输入密码">
         </div>
-        <button type="submit" style="width:100%">登录</button>
+        <button type="submit" class="btn btn-block btn-lg mt-2">登 录</button>
       </form>
     </div>
   </div>
 </div>
+<script src="/static/app.js"></script>
 {{end}}

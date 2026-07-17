@@ -185,8 +185,18 @@ func (s *Server) adminLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	d := adminData{Title: "登录", Username: username}
 
+	// 登录失败限流：按 用户名|IP 维度,5 次失败后锁定 15 分钟。
+	limitKey := username + "|" + clientIP(r)
+	if ok, remain := s.loginLimit.allow(limitKey); !ok {
+		d.Error = "登录失败次数过多，请 " + strconv.Itoa(int(remain.Minutes())+1) + " 分钟后再试"
+		d.CSRF = s.loginCSRF(r)
+		s.renderAdmin(w, "login.html", d)
+		return
+	}
+
 	user, err := s.store.UserByName(username)
 	if err != nil || !s.store.VerifyPassword(user, password) {
+		s.loginLimit.fail(limitKey)
 		d.Error = "用户名或密码错误"
 		d.CSRF = s.loginCSRF(r)
 		s.renderAdmin(w, "login.html", d)
@@ -198,6 +208,8 @@ func (s *Server) adminLogin(w http.ResponseWriter, r *http.Request) {
 		s.renderAdmin(w, "login.html", d)
 		return
 	}
+	// 登录成功：清除该 key 的失败计数
+	s.loginLimit.success(limitKey)
 	// 登录成功后清除 loginCSRF cookie
 	http.SetCookie(w, &http.Cookie{Name: loginCSRFCookie, Value: "", Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)

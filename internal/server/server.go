@@ -26,10 +26,11 @@ const MaxUploadBytes = 10 * 1024 * 1024
 
 // Server 聚合存储层与运行配置。
 type Server struct {
-	store     *store.Store
-	addr      string // 监听地址，用于未配置 publicURL 时推导默认 base URL
-	publicURL string // 对外可访问的基础 URL，如 https://site.example.com ；用于拼访问链接
-	mux       *http.ServeMux
+	store        *store.Store
+	addr         string        // 监听地址，用于未配置 publicURL 时推导默认 base URL
+	publicURL    string        // 对外可访问的基础 URL，如 https://site.example.com ；用于拼访问链接
+	mux          *http.ServeMux
+	loginLimit   *loginLimiter // 后台登录失败计数(防暴力枚举)
 }
 
 // Options 构造 Server 的可选参数。
@@ -41,9 +42,10 @@ type Options struct {
 // New 创建 Server 并注册路由。
 func New(st *store.Store, opt Options) *Server {
 	s := &Server{
-		store:     st,
-		addr:      opt.Addr,
-		publicURL: strings.TrimRight(opt.PublicURL, "/"),
+		store:      st,
+		addr:       opt.Addr,
+		publicURL:  strings.TrimRight(opt.PublicURL, "/"),
+		loginLimit: newLoginLimiter(),
 	}
 	s.mux = http.NewServeMux()
 	s.register()
@@ -58,12 +60,30 @@ func (s *Server) Handler() http.Handler {
 // ListenAndServe 启动 HTTP 服务。
 func (s *Server) ListenAndServe(addr string) error {
 	srv := &http.Server{
-		Addr:              addr,
-		Handler:           s.logging(s.mux),
+		Addr: addr,
+		// 中间件包裹顺序(从外到内):安全响应头 → 访问日志 → 路由。
+		Handler:           s.secureHeaders(s.logging(s.mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("html-site listening on %s", addr)
 	return srv.ListenAndServe()
+}
+
+// secureHeaders 注入通用安全响应头。全部为附加项,不改变业务行为。
+//
+//   - X-Content-Type-Options: nosniff  —— 阻止浏览器对响应做 MIME 嗅探
+//   - X-Frame-Options: SAMEORIGIN      —— 仅允许同源页面 iframe 嵌入(后台编辑器
+//     的实时预览、同源托管页仍可正常工作,只挡跨站点击劫持)
+//   - Referrer-Policy: strict-origin-when-cross-origin —— 跨站请求只带 origin,不带完整路径
+//
+// 不设 CSP:后台模板与托管 HTML 内联脚本较多,内网场景收益有限且配置不当易破坏 UI。
+func (s *Server) secureHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.ServeHTTP(w, r)
+	})
 }
 
 // Shutdown 优雅关闭。

@@ -57,6 +57,15 @@ jobs:
           else
             echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
+          # 版本一致性校验：tag（去掉前导 v）必须等于 internal/cli/VERSION 文件内容。
+          # 避免发版时忘了同步 VERSION 文件。不一致则警告（不阻断，由人工确认）。
+          TAG_VER="$(echo "${{ steps.tag.outputs.version }}" | sed 's/^v//')"
+          FILE_VER="$(tr -d '[:space:]' < internal/cli/VERSION)"
+          if [ -n "$FILE_VER" ] && [ "$TAG_VER" != "$FILE_VER" ]; then
+            echo "::warning::版本不一致：tag=${TAG_VER} 但 internal/cli/VERSION=${FILE_VER}。请同步后重新发版。"
+          else
+            echo "✓ 版本一致：${TAG_VER}"
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v5

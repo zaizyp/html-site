@@ -6,6 +6,7 @@ package cli
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,9 +19,22 @@ import (
 )
 
 // Version 是当前二进制的版本号。
-// CI 发布时通过 -ldflags="-X html-site/internal/cli.Version=v1.0.1" 注入；
-// 本地 go build 保持 "dev"。
-var Version = "dev"
+// 优先级：CI 发布时通过 -ldflags 注入（如 v1.2.0，带 tag 前缀） >
+// 编译期从 internal/cli/VERSION 嵌入（本地 go build 也能看到真实版本） > "dev"。
+var Version = versionFromEmbed()
+
+// versionFile 由 go:embed 在编译期嵌入 internal/cli/VERSION 的内容。
+// 该文件是版本号的"事实记录"，发版时改它即可（CI 也读它生成 tag）。
+//
+//go:embed VERSION
+var versionFile string
+
+func versionFromEmbed() string {
+	if v := strings.TrimSpace(versionFile); v != "" {
+		return v
+	}
+	return "dev"
+}
 
 // Dispatch 是入口：根据 args[0] 路由到对应子命令。
 // 返回 (exitCode, error)：error 非空时已打印。

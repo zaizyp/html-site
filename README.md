@@ -91,7 +91,7 @@ html-site config set --url <服务器地址> --token <你的token>
 **第 4 步 · 验证**
 
 ```bash
-html-site version     # 应输出版本号，如 html-site v1.0.1
+html-site version     # 应输出版本号，如 html-site 1.2.0
 html-site config show # 确认 url 和 token 已配置（token 脱敏显示）
 ```
 

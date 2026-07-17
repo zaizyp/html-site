@@ -26,10 +26,10 @@
       <tr>
         <td class="num muted" data-label="ID">{{.ID}}</td>
         <td data-label="用户名">
-          <div style="display:flex;align-items:center;gap:8px">
+          <a href="/admin/pages?owner={{.ID}}" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit">
             <span class="avatar" style="width:26px;height:26px;font-size:11px">{{slice .Name 0 1}}</span>
             {{.Name}}
-          </div>
+          </a>
         </td>
         <td data-label="角色">{{if .IsAdmin}}<span class="tag tag-admin">管理员</span>{{else}}<span class="tag tag-user">普通</span>{{end}}</td>
         <td data-label="密码">{{if .HasPassword}}<span class="muted">已设置</span>{{else}}<span class="badge-dot dot-protected">未设置</span>{{end}}</td>

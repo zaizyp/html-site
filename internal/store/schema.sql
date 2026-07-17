@@ -12,12 +12,15 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- groups 必须在 pages 之前创建（pages.group_id 引用 groups）
+-- 树形目录：parent_id 指向父分组（0=根），ON DELETE CASCADE 删父分组时级联删子树。
 CREATE TABLE IF NOT EXISTS groups (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id  INTEGER NOT NULL DEFAULT 0,   -- 0=根；不加外键约束（0 是哨兵值，指向不存在的行），由应用层保证
   name       TEXT NOT NULL,
+  depth      INTEGER NOT NULL DEFAULT 0,   -- 0=根，最大 store.MaxGroupDepth
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(owner_id, name)
+  UNIQUE(owner_id, parent_id, name)        -- 同一父下名字唯一；不同父下允许同名
 );
 
 CREATE TABLE IF NOT EXISTS pages (

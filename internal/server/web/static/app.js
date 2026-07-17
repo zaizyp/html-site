@@ -320,6 +320,25 @@
   }
 
   /* ---------- boot ---------- */
+  /* ---------- 通用 toggle（data-toggle="选择器" 切换元素显隐） ---------- */
+  function initToggle() {
+    document.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-toggle]");
+      if (!t) return;
+      e.preventDefault();
+      var sel = t.getAttribute("data-toggle");
+      var target = document.querySelector(sel);
+      if (!target) return;
+      var hidden = target.style.display === "none";
+      target.style.display = hidden ? "" : "none";
+      // 显示时自动聚焦第一个输入框
+      if (hidden) {
+        var inp = target.querySelector("input[type=text], input:not([type])");
+        if (inp) inp.focus();
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
     initSidebar();
@@ -329,6 +348,7 @@
     initDropzone();
     initEditor();
     initCharts();
+    initToggle();
     setTimeout(flashToToast, 100);
   });
 

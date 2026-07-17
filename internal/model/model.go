@@ -70,14 +70,18 @@ type UpdatePageRequest struct {
 	ShareCode    string  `json:"share_code,omitempty"`
 }
 
-// Group 单层分组。
+// Group 树形目录节点（邻接表，parent_id 指向父分组，0=根）。
+// 最多 5 层：根 depth=0，最深子节点 depth=4（见 store.MaxGroupDepth）。
 type Group struct {
-	ID        int64     `json:"id"`
-	OwnerID   int64     `json:"owner_id"`
-	OwnerName string    `json:"owner_name,omitempty"`
-	Name      string    `json:"name"`
-	PageCount int       `json:"page_count,omitempty"` // 列表展示用
-	CreatedAt time.Time `json:"created_at"`
+	ID         int64     `json:"id"`
+	OwnerID    int64     `json:"owner_id"`
+	ParentID   int64     `json:"parent_id,omitempty"`  // 0=根
+	Depth      int       `json:"depth,omitempty"`      // 0=根
+	OwnerName  string    `json:"owner_name,omitempty"`
+	Name       string    `json:"name"`
+	PageCount  int       `json:"page_count,omitempty"`  // 直接子页面数（文件夹浏览用）
+	ChildCount int       `json:"child_count,omitempty"` // 直接子分组数（文件夹浏览用）
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // Session 后台登录会话。

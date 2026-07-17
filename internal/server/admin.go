@@ -126,6 +126,11 @@ type adminData struct {
 	UserPageCount                    map[int64]int
 	FilterOwner, FilterGroup         int64
 	Query                            string
+	// 文件夹浏览（进入式目录）
+	ViewedUser    *model.User   // 当前正在浏览其目录的用户（管理员视角）
+	CurrentGroup  *model.Group  // 当前所在分组（nil=根目录）
+	SubGroups     []*model.Group // 当前目录下的子文件夹
+	Breadcrumbs   []*model.Group // 面包屑：根 → ... → 当前
 	Username                         string
 	Error                            string
 	MaskedToken                      string
@@ -352,55 +357,88 @@ func (s *Server) adminPages(w http.ResponseWriter, r *http.Request) {
 	d := adminData{Title: "页面管理", CurrentUser: u, CSRF: currentCSRF(r)}
 	d.Flash = s.popFlash(w, r)
 
-	// 解析筛选参数
-	ownerFilter := u.ID // 普通用户固定看自己
+	// 管理员且未指定 owner：顶层显示「用户列表」（用户=顶层文件夹）
+	if u.IsAdmin() && r.URL.Query().Get("owner") == "" {
+		d.Users, _ = s.store.ListUsers()
+		d.UserPageCount = s.fillUserPageCount(d.Users)
+		d.Title = "用户目录"
+		s.renderAdmin(w, "pages.html", d)
+		return
+	}
+
+	// 解析 owner / group 参数，确定"当前所在目录"
+	ownerID := u.ID // 普通用户固定看自己
 	if u.IsAdmin() {
 		if v := r.URL.Query().Get("owner"); v != "" {
 			if id, err := strconv.ParseInt(v, 10, 64); err == nil {
-				ownerFilter = id
+				ownerID = id
 				d.FilterOwner = id
+				if vu, _ := s.store.UserByID(id); vu != nil {
+					d.ViewedUser = vu
+				}
 			}
 		}
 	}
+	var groupID int64
 	if v := r.URL.Query().Get("group"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			groupID = id
 			d.FilterGroup = id
 		}
 	}
 	d.Query = strings.TrimSpace(r.URL.Query().Get("q"))
 
-	// 分页
+	// 安全校验：普通用户不能进入他人目录或他人分组
+	if !u.IsAdmin() {
+		if groupID != 0 {
+			if g, _ := s.store.GroupByID(groupID); g == nil || g.OwnerID != u.ID {
+				http.Error(w, "无权访问", http.StatusForbidden)
+				return
+			}
+		}
+	} else if groupID != 0 {
+		// 管理员进入分组时，校验分组归属与 owner 参数一致
+		if g, _ := s.store.GroupByID(groupID); g != nil {
+			d.CurrentGroup = g
+			if g.OwnerID != ownerID {
+				ownerID = g.OwnerID // 以分组实际归属为准
+				d.FilterOwner = ownerID
+				if vu, _ := s.store.UserByID(ownerID); vu != nil {
+					d.ViewedUser = vu
+				}
+			}
+		}
+	}
+
+	// 面包屑：根 → ... → 当前分组
+	d.Breadcrumbs, _ = s.store.GroupPath(groupID)
+	// 当前目录下的子文件夹
+	d.SubGroups, _ = s.store.ListGroupsByParent(ownerID, groupID)
+
+	// 当前目录下的直接页面（分页）
 	d.Page, _ = strconv.Atoi(r.URL.Query().Get("page"))
 	if d.Page < 1 {
 		d.Page = 1
 	}
 	const pageSize = 15
-
-	// 查询数据：管理员且未指定 owner 看全站；否则按 owner
-	listOwner := ownerFilter
-	scopeOwner := int64(0) // 统计总数用
-	if !(u.IsAdmin() && d.FilterOwner == 0) {
-		scopeOwner = ownerFilter
+	groupFilter := groupID
+	if groupID == 0 {
+		groupFilter = store.UnGrouped // 根目录：只看未分组页面（group_id IS NULL）
 	}
-	// 管理员"所有用户"时，ownerFilter=0 表示全站
-	if u.IsAdmin() && d.FilterOwner == 0 {
-		listOwner = 0
-	}
-	pages, _ := s.store.ListPagesPaged(listOwner, d.FilterGroup, d.Page, pageSize)
+	pages, _ := s.store.ListPagesPaged(ownerID, groupFilter, d.Page, pageSize)
 	pages = filterSearch(pages, d.Query)
 	_ = s.store.AnnotatePagesWithViews(pages)
 	d.Pages = pages
-	d.Total, _ = s.store.CountPages(scopeOwner, d.FilterGroup)
+	d.Total, _ = s.store.CountPages(ownerID, groupFilter)
 	d.TotalPages = (d.Total + pageSize - 1) / pageSize
 	if d.TotalPages < 1 {
 		d.TotalPages = 1
 	}
 	d.PageNums = pageNumbers(d.Page, d.TotalPages)
 
-	// 分组列表（筛选下拉用）
+	// 兼容：模板里移动分组下拉用（全部分组，扁平）
 	if u.IsAdmin() {
 		d.Groups, _ = s.store.ListAllGroups()
-		d.Users, _ = s.store.ListUsers()
 	} else {
 		d.Groups, _ = s.store.ListGroupsByOwner(u.ID)
 	}
@@ -494,15 +532,10 @@ func (s *Server) adminPageDelete(w http.ResponseWriter, r *http.Request) {
 // 分组管理
 // ----------------------------------------------------------------------------
 
+// adminGroups 已废弃：分组管理与页面管理合并为文件夹浏览。
+// 老链接重定向到 /admin/pages（保持向后兼容）。
 func (s *Server) adminGroups(w http.ResponseWriter, r *http.Request) {
-	u := currentUser(r)
-	d := adminData{Title: "分组管理", CurrentUser: u, CSRF: currentCSRF(r)}
-	if u.IsAdmin() {
-		d.Groups, _ = s.store.ListAllGroups()
-	} else {
-		d.Groups, _ = s.store.ListGroupsByOwner(u.ID)
-	}
-	s.renderAdmin(w, "groups.html", d)
+	http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 }
 
 func (s *Server) adminGroupCreate(w http.ResponseWriter, r *http.Request) {
@@ -512,13 +545,31 @@ func (s *Server) adminGroupCreate(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r)
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
-		http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/pages", http.StatusSeeOther)
 		return
 	}
-	if _, err := s.store.CreateGroup(u.ID, name); err != nil {
+	parentID, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
+	// 管理员可在指定 owner 下建分组；普通用户只能在自己的 owner 下
+	ownerID := u.ID
+	if u.IsAdmin() {
+		if v, _ := strconv.ParseInt(r.FormValue("owner"), 10, 64); v > 0 {
+			ownerID = v
+		}
+	}
+	if _, err := s.store.CreateGroup(ownerID, name, parentID); err != nil {
 		s.setFlash(w, "err", "创建失败："+err.Error())
 	}
-	http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+	// 回到创建时的目录视图
+	back := "/admin/pages"
+	if u.IsAdmin() {
+		back += "?owner=" + strconv.FormatInt(ownerID, 10)
+		if parentID > 0 {
+			back += "&group=" + strconv.FormatInt(parentID, 10)
+		}
+	} else if parentID > 0 {
+		back += "?group=" + strconv.FormatInt(parentID, 10)
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 func (s *Server) adminGroupRename(w http.ResponseWriter, r *http.Request) {
@@ -531,11 +582,21 @@ func (s *Server) adminGroupRename(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// 取分组的真实 owner（管理员可操作任意用户的分组；普通用户只能操作自己的）
+	g, _ := s.store.GroupByID(gid)
+	if g == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !u.IsAdmin() && g.OwnerID != u.ID {
+		http.Error(w, "无权操作", http.StatusForbidden)
+		return
+	}
 	name := strings.TrimSpace(r.FormValue("name"))
-	if err := s.store.RenameGroup(gid, u.ID, name); err != nil {
+	if err := s.store.RenameGroup(gid, g.OwnerID, name); err != nil {
 		s.setFlash(w, "err", "改名失败："+err.Error())
 	}
-	http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+	http.Redirect(w, r, groupBackURL(u, g), http.StatusSeeOther)
 }
 
 func (s *Server) adminGroupDelete(w http.ResponseWriter, r *http.Request) {
@@ -548,10 +609,49 @@ func (s *Server) adminGroupDelete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := s.store.DeleteGroup(gid, u.ID); err != nil {
-		s.setFlash(w, "err", "删除失败："+err.Error())
+	g, _ := s.store.GroupByID(gid)
+	if g == nil {
+		http.NotFound(w, r)
+		return
 	}
-	http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+	if !u.IsAdmin() && g.OwnerID != u.ID {
+		http.Error(w, "无权操作", http.StatusForbidden)
+		return
+	}
+	// 删除后回到父目录（子树会被删，页面上移到父级）
+	parentID := g.ParentID
+	deleteOK := true
+	if err := s.store.DeleteGroup(gid, g.OwnerID); err != nil {
+		s.setFlash(w, "err", "删除失败："+err.Error())
+		deleteOK = false
+	}
+	// 删除失败回到当前分组；成功则回到父目录
+	var back *model.Group
+	if !deleteOK {
+		back = g
+	} else if parentID != 0 {
+		back, _ = s.store.GroupByID(parentID)
+	}
+	http.Redirect(w, r, groupBackURL(u, back), http.StatusSeeOther)
+}
+
+// groupBackURL 生成"回到某分组所在目录"的 URL（管理员带上 owner 参数）。
+// parent 为 nil 表示回到根目录。
+func groupBackURL(u *model.User, parent *model.Group) string {
+	q := ""
+	var ownerID int64
+	if parent != nil {
+		ownerID = parent.OwnerID
+		q = "?group=" + strconv.FormatInt(parent.ID, 10)
+	}
+	if u.IsAdmin() {
+		if q == "" {
+			q = "?owner=" + strconv.FormatInt(ownerID, 10)
+		} else if ownerID != 0 {
+			q += "&owner=" + strconv.FormatInt(ownerID, 10)
+		}
+	}
+	return "/admin/pages" + q
 }
 
 // pathID 从路径中提取第 idx 段（按 / 分割）。

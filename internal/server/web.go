@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"html-site/internal/model"
 )
 
 //go:embed web/tmpl/*.html
@@ -25,6 +27,7 @@ var tmplFuncs = template.FuncMap{
 	"sub":       func(a, b int) int { return a - b },
 	"pct":       pctWidth, // count, max -> "NN%"
 	"pageURL":   pageURLFn,
+	"folderURL": folderURLFn,
 }
 
 // pctWidth 返回条形图填充宽度百分比（count/max*100，至少 2%）。
@@ -54,6 +57,32 @@ func pageURLFn(base string, page int, owner, group int64, q string) string {
 		v.Set("q", q)
 	}
 	return base + "?" + v.Encode()
+}
+
+// folderURLFn 生成"进入某分组目录"的 URL（文件夹浏览用）。
+// 用法：{{folderURL currentUser viewedUser group}}
+// - 管理员：带 owner（viewedUser 的 id）+ group
+// - 普通用户：只带 group（owner 固定为自己，不必出现在 URL）
+// group 为 nil 时返回根目录（管理员回到用户根，普通用户回到自己的根）。
+func folderURLFn(currentUser, viewedUser *model.User, group *model.Group) string {
+	v := url.Values{}
+	if currentUser != nil && currentUser.IsAdmin() {
+		owner := int64(0)
+		if viewedUser != nil {
+			owner = viewedUser.ID
+		}
+		if owner != 0 {
+			v.Set("owner", strconv.FormatInt(owner, 10))
+		}
+	}
+	if group != nil && group.ID != 0 {
+		v.Set("group", strconv.FormatInt(group.ID, 10))
+	}
+	enc := v.Encode()
+	if enc == "" {
+		return "/admin/pages"
+	}
+	return "/admin/pages?" + enc
 }
 
 // sizeHuman 字节数 → 人类可读。

@@ -1,76 +1,123 @@
 {{define "content"}}
 <div class="card">
+  {{- if and .CurrentUser.IsAdmin (not .ViewedUser)}}
   <div class="card-head">
-    <h1>页面管理</h1>
+    <h1>用户目录</h1>
+  </div>
+  <p class="sub">选择一个用户，进入其目录树。</p>
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
+
+  {{- if .Users}}
+  <div class="folder-grid">
+    {{- range .Users}}
+    <a class="folder-card" href="/admin/pages?owner={{.ID}}">
+      <svg class="ic ic-lg"><use href="/static/icons.svg#icon-folder"/></svg>
+      <div class="folder-name">{{.Name}}</div>
+      <div class="folder-meta muted">
+        {{if eq .Role "admin"}}<span class="badge-role admin">管理员</span>{{else}}<span class="badge-role">普通</span>{{end}}
+        {{if index $.UserPageCount .ID}}· {{index $.UserPageCount .ID}} 页{{end}}
+      </div>
+    </a>
+    {{- end}}
+  </div>
+  {{- else}}
+  <div class="empty">
+    <svg class="ic"><use href="/static/icons.svg#icon-empty"/></svg>
+    <div class="et">还没有用户</div>
+  </div>
+  {{- end}}
+
+  {{- else}}<!-- ===== 进入某用户的目录树 / 普通用户自己的目录 ===== -->
+  <div class="card-head">
+    <h1>目录浏览</h1>
     <div class="head-right">
-      <a class="btn btn-sm btn-soft" href="/admin/pages/new"><svg class="ic"><use href="/static/icons.svg#icon-upload"/></svg> 上传 / 新建</a>
+      <button type="button" class="btn btn-sm btn-soft" data-toggle="new-folder-form"><svg class="ic"><use href="/static/icons.svg#icon-folder"/></svg> 新建子目录</button>
+      {{$upURL := folderURL .CurrentUser .ViewedUser .CurrentGroup}}<a class="btn btn-sm btn-soft" href="{{$upURL}}"><svg class="ic"><use href="/static/icons.svg#icon-upload"/></svg> 上传页面</a>
     </div>
   </div>
-  <p class="sub">{{- if .CurrentUser.IsAdmin}}全部用户的页面{{else}}我的页面{{end}}</p>
+
+  <!-- 面包屑：根 → ... → 当前 -->
+  <nav class="breadcrumb">
+    {{- if .CurrentUser.IsAdmin}}
+    <a href="/admin/pages">用户目录</a>
+    {{- if .ViewedUser}}<span class="bc-sep">/</span><a href="/admin/pages?owner={{.ViewedUser.ID}}">{{.ViewedUser.Name}}</a>{{end}}
+    {{- else}}
+    <a href="/admin/pages">我的空间</a>
+    {{- end}}
+    {{- range $i, $g := .Breadcrumbs}}<span class="bc-sep">/</span><a href="{{folderURL $.CurrentUser $.ViewedUser $g}}">{{.Name}}</a>{{- end}}
+    {{- if .CurrentGroup}}<span class="bc-sep">/</span><span class="bc-current">{{.CurrentGroup.Name}}</span>{{end}}
+  </nav>
+
+  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
+
+  <!-- 新建子目录表单（默认隐藏） -->
+  <form class="toolbar new-folder-form" method="POST" action="/admin/groups/create" data-hidden style="display:none;gap:6px;align-items:center">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="parent" value="{{.FilterGroup}}">
+    {{- if .CurrentUser.IsAdmin}}<input type="hidden" name="owner" value="{{if .ViewedUser}}{{.ViewedUser.ID}}{{else}}{{.CurrentUser.ID}}{{end}}">{{- end}}
+    <input type="text" name="name" placeholder="目录名" required style="min-width:180px">
+    <button type="submit" class="btn btn-sm">创建</button>
+    <button type="button" class="btn btn-sm btn-ghost" data-toggle="new-folder-form">取消</button>
+  </form>
+
+  <!-- 子目录区 -->
+  {{- if .SubGroups}}
+  <div class="folder-grid">
+    {{- range .SubGroups}}
+    <div class="folder-card folder-card-with-actions">
+      <a class="folder-link" href="{{folderURL $.CurrentUser $.ViewedUser .}}">
+        <svg class="ic ic-lg"><use href="/static/icons.svg#icon-folder"/></svg>
+        <div class="folder-name" title="{{.Name}}">{{.Name}}</div>
+        <div class="folder-meta muted">{{.PageCount}} 页 · {{.ChildCount}} 子目录</div>
+      </a>
+      <div class="folder-actions">
+        <form method="POST" action="/admin/groups/{{.ID}}/rename" style="display:inline-flex;gap:4px;align-items:center">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="text" name="name" value="{{.Name}}" class="rename-input" style="width:90px;font-size:12px">
+          <button type="submit" class="btn btn-sm btn-ghost" title="改名"><svg class="ic"><use href="/static/icons.svg#icon-edit"/></svg></button>
+        </form>
+        <form method="POST" action="/admin/groups/{{.ID}}/delete" data-confirm="确定删除目录「{{.Name}}」？子目录将一并删除，其下页面上移到父目录。此操作不可撤销！" data-danger>
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <button type="submit" class="btn btn-sm btn-danger-ghost" title="删除"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg></button>
+        </form>
+      </div>
+    </div>
+    {{- end}}
+  </div>
+  {{- end}}
+
+  <!-- 当前目录下的页面列表 -->
+  <h2 class="section-title">页面 <span class="muted" style="font-weight:normal;font-size:13px">({{.Total}})</span></h2>
 
   <form class="toolbar" method="GET" action="/admin/pages">
-    {{- if .CurrentUser.IsAdmin}}
-    <select name="owner">
-      <option value="">所有用户</option>
-      {{- range .Users}}<option value="{{.ID}}" {{if eq $.FilterOwner .ID}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-    {{- end}}
-    <select name="group">
-      <option value="0">全部分组</option>
-      <option value="-1" {{if eq .FilterGroup -1}}selected{{end}}>未分组</option>
-      {{- range .Groups}}<option value="{{.ID}}" {{if eq $.FilterGroup .ID}}selected{{end}}>{{.Name}} ({{.PageCount}})</option>{{end}}
-    </select>
-    <input type="search" name="q" value="{{.Query}}" placeholder="搜索 slug / 标题" style="min-width:200px">
-    <button type="submit" class="btn btn-sm"><svg class="ic"><use href="/static/icons.svg#icon-search"/></svg> 筛选</button>
+    {{- if .CurrentUser.IsAdmin}}<input type="hidden" name="owner" value="{{.FilterOwner}}">{{- end}}
+    <input type="hidden" name="group" value="{{.FilterGroup}}">
+    <input type="search" name="q" value="{{.Query}}" placeholder="搜索当前目录的页面" style="min-width:200px">
+    <button type="submit" class="btn btn-sm"><svg class="ic"><use href="/static/icons.svg#icon-search"/></svg> 搜索</button>
     <span class="spacer"></span>
     {{- if gt .TotalPages 1}}
     <span class="muted nowrap">第 {{.Page}} / {{.TotalPages}} 页 · 共 {{.Total}} 条</span>
     {{- end}}
   </form>
 
-  {{- range .Flash}}<div data-flash="{{.Class}}" style="display:none">{{.Msg}}</div>{{end}}
-
   {{- if .Pages}}
-  <!-- 批量操作栏：选中的页面 id 由 app.js 在提交时动态注入各批量表单 -->
-  <div class="batch-bar" data-batch-bar>
-    <span class="sel-count" data-sel-count>0</span> 项已选择
-    <span class="spacer" style="flex:1"></span>
-    <form method="POST" action="/admin/pages/batch" data-batch-form data-confirm="确定批量移动选中的页面到该分组？" style="display:inline-flex;gap:6px;align-items:center">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <input type="hidden" name="action" value="move">
-      <select name="group" style="width:auto;min-width:120px">
-        <option value="0">移出分组</option>
-        {{- range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-      </select>
-      <button type="submit" class="btn btn-sm btn-ghost">移动分组</button>
-    </form>
-    <form method="POST" action="/admin/pages/batch" data-batch-form data-confirm="确定批量删除选中的页面？此操作不可撤销！" data-danger style="display:inline">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <input type="hidden" name="action" value="delete">
-      <button type="submit" class="btn btn-sm btn-danger-ghost"><svg class="ic"><use href="/static/icons.svg#icon-trash"/></svg> 批量删除</button>
-    </form>
-  </div>
-
-  <table class="responsive" data-select-table>
+  <table class="responsive">
     <thead><tr>
-      <th class="cb"><input type="checkbox" data-check-all></th>
-      <th>Slug</th><th>标题</th><th>分组</th><th>访问</th>
+      <th>Slug</th><th>标题</th><th>访问</th>
       <th class="num">PV</th><th class="num">大小</th><th>更新</th>
-      {{- if .CurrentUser.IsAdmin}}<th>归属</th>{{end}}
+      {{- if .CurrentUser.IsAdmin}}{{- if not .ViewedUser}}<th>归属</th>{{- end}}{{- end}}
       <th>操作</th>
     </tr></thead>
     <tbody>
     {{- range .Pages}}
       <tr>
-        <td class="cb" data-label=""><input type="checkbox" value="{{.ID}}" data-check-row></td>
         <td class="mono" data-label="Slug">{{.Slug}}</td>
         <td class="t-wrap" data-label="标题">{{.Title}}</td>
-        <td data-label="分组">{{if .GroupName}}{{.GroupName}}{{else}}<span class="muted">—</span>{{end}}</td>
         <td data-label="访问">{{if .HasCode}}<span class="badge-dot dot-protected">受保护</span>{{else}}<span class="badge-dot dot-public">公开</span>{{end}}</td>
         <td class="num tabular" data-label="PV">{{.Views}}</td>
         <td class="num muted" data-label="大小">{{SizeHuman .SizeBytes}}</td>
         <td class="muted nowrap" data-label="更新">{{.UpdatedAt.Format "01-02 15:04"}}</td>
-        {{- if $.CurrentUser.IsAdmin}}<td class="muted" data-label="归属">{{.OwnerName}}</td>{{end}}
+        {{- if and $.CurrentUser.IsAdmin (not $.ViewedUser)}}<td class="muted" data-label="归属">{{.OwnerName}}</td>{{end}}
         <td class="row-actions-cell">
           <div class="row-actions">
             <a class="btn btn-sm btn-ghost" href="/v/{{.Slug}}" target="_blank" title="打开"><svg class="ic"><use href="/static/icons.svg#icon-external"/></svg></a>
@@ -98,12 +145,20 @@
   </div>
   {{- end}}
 
+  {{- else if not .SubGroups}}
+  <div class="empty">
+    <svg class="ic"><use href="/static/icons.svg#icon-empty"/></svg>
+    <div class="et">空目录</div>
+    <div class="es">点击右上角「新建子目录」或「上传页面」</div>
+  </div>
   {{- else}}
   <div class="empty">
     <svg class="ic"><use href="/static/icons.svg#icon-empty"/></svg>
-    <div class="et">没有匹配的页面</div>
-    <div class="es">点击右上角「上传 / 新建」发布你的第一个 HTML 页面</div>
+    <div class="et">当前目录下没有页面</div>
+    <div class="es">页面可能在子目录里，点击上方文件夹进入。</div>
   </div>
   {{- end}}
+
+  {{- end}}<!-- /else 进入目录 -->
 </div>
 {{end}}

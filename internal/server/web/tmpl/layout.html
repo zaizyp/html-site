@@ -22,11 +22,8 @@
       <a class="nav-item{{if eq .Title "概览"}} active{{end}}" href="/admin">
         <svg class="ic"><use href="/static/icons.svg#icon-dashboard"/></svg> 概览
       </a>
-      <a class="nav-item{{if eq .Title "页面管理"}} active{{end}}" href="/admin/pages">
-        <svg class="ic"><use href="/static/icons.svg#icon-pages"/></svg> 页面管理
-      </a>
-      <a class="nav-item{{if eq .Title "分组管理"}} active{{end}}" href="/admin/groups">
-        <svg class="ic"><use href="/static/icons.svg#icon-groups"/></svg> 分组管理
+      <a class="nav-item{{if or (eq .Title "页面管理") (eq .Title "目录浏览") (eq .Title "用户目录")}} active{{end}}" href="/admin/pages">
+        <svg class="ic"><use href="/static/icons.svg#icon-pages"/></svg> 目录浏览
       </a>
       {{- if .CurrentUser.IsAdmin}}
       <div class="nav-section-label">管理</div>

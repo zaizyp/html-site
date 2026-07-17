@@ -31,11 +31,21 @@ func (s *Store) migrate() error {
 	if err := addColumnIfMissing(s.db, "pages", "group_id", "INTEGER REFERENCES groups(id) ON DELETE SET NULL"); err != nil {
 		return err
 	}
+	// 2b. groups 表补 parent_id / depth 列（树形目录，旧库迁移）
+	// 旧库历史 group 自动得到 parent_id=0、depth=0 成为根节点，无需回填。
+	if err := addColumnIfMissing(s.db, "groups", "parent_id", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(s.db, "groups", "depth", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	// 3. 补建全部索引（幂等，CREATE INDEX IF NOT EXISTS）
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_pages_owner ON pages(owner_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_pages_slug  ON pages(slug);`,
 		`CREATE INDEX IF NOT EXISTS idx_pages_group ON pages(group_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_groups_parent ON groups(parent_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_groups_owner  ON groups(owner_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_exp  ON sessions(expires_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_views_page ON page_views(page_id);`,

@@ -397,3 +397,26 @@ pre{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-
 @media (max-width:480px){
   .kpi-grid{grid-template-columns:1fr}
 }
+
+/* ============ 文件夹浏览（目录树） ============ */
+.folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 0 24px}
+.folder-card{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--border,#e5e7eb);border-radius:10px;background:var(--card-soft,#fafafa);text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+.folder-card:hover{border-color:var(--accent,#2563eb);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.folder-link{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:inherit;flex:1}
+.folder-card-with-actions{position:relative}
+.folder-actions{display:flex;gap:4px;margin-top:8px;border-top:1px dashed var(--border,#e5e7eb);padding-top:8px}
+.folder-name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-meta{font-size:12px}
+.ic-lg{width:28px;height:28px;opacity:.7}
+.badge-role{font-size:11px;padding:1px 6px;border-radius:999px;background:#e5e7eb;color:#374151}
+.badge-role.admin{background:#dbeafe;color:#1e40af}
+.rename-input{padding:2px 6px;border:1px solid var(--border,#e5e7eb);border-radius:4px}
+
+/* 面包屑 */
+.breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 0 16px;font-size:13px}
+.breadcrumb a{color:var(--accent,#2563eb);text-decoration:none}
+.breadcrumb a:hover{text-decoration:underline}
+.bc-sep{color:var(--muted,#9ca3af)}
+.bc-current{color:var(--text,#1f2937);font-weight:600}
+
+.section-title{font-size:15px;margin:8px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border,#e5e7eb)}
